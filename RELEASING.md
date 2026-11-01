@@ -1,6 +1,6 @@
 # 版本发布说明
 
-当前版本：`dsh-research-workbench@0.3.0`。`main` 合并后可以通过 GitHub 地址安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。
+当前版本：`dsh-research-workbench@0.3.1`。`main` 合并后可以通过 GitHub 地址安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。
 
 ## 发布到 GitHub
 

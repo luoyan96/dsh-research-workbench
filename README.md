@@ -2,7 +2,7 @@
 
 将 **项目书、PPT、论文、专利与软著** 四个原生工作台直接加入 DeepSeek Harness（DSH）左侧导航。插件采用 Cordis + Slots，使用 DSH 现有会话和工作区，不 Fork DSH、不替换品牌和主聊天界面。
 
-**v0.3.0** 是四个模块均可保存、编辑和导出实际文件的集成版本。已通过离线测试与 Office 文件解析/渲染验证；**Windows DSH 实机验收仍需要使用者运行本版测试**。
+**v0.3.1** 是四个模块均可保存、编辑和导出实际文件的集成版本。已通过离线测试与 Office 文件解析/渲染验证；**Windows DSH 实机验收仍需要使用者运行本版测试**。
 
 ## 已完成的功能
 
@@ -51,7 +51,7 @@
 
 ## 安装
 
-### 直接安装 GitHub main（先确保 v0.3.0 已推送）
+### 直接安装 GitHub main（先确保 v0.3.1 已推送）
 
 ```powershell
 dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
@@ -71,7 +71,7 @@ dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.3.0.tgz"
+dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.3.1.tgz"
 ```
 
 ### npm 正式发布后
@@ -95,7 +95,7 @@ dsh plugin --profile web add dsh-research-workbench@latest
 
 - Host：`src/index.js` + `src/papers.js` + `src/workbench/`，浏览器：`src/client.js`；预构建文件位于 `lib/`。
 - 使用 `sidebar.panellist` 与 `main` keyed slots，保留原有 DSH Session/Workspace。
-- 本地 Web API：`/research-workbench/api`（论文）及 `/research-workbench/content`（项目书/PPT/知识产权）。仅允许本机 loopback，写请求要求同源 Origin；所有文件写入限制在插件数据目录。
+- 本地 Web API：`/research-workbench/api`（论文）及 `/research-workbench/content`（项目书/PPT/知识产权）。仅允许本机 loopback，所有读写请求都必须经过 DSH Connection 有效浏览器会话认证，拒绝显式跨站 Origin；Windows Desktop 认证代理剥离 Origin 后的请求同样受认证保护。所有文件写入限制在插件数据目录。
 - Office 文件导出使用纯 Node.js Open XML 生成器，无外部运行时依赖、无 Word/PowerPoint 安装要求。DOCX/PPTX 在 Word/PowerPoint 中仍需完成最终人工校对。
 - 不生成或执行 Office 宏；Patent/Softcopyright 不提供自动官方提交；不自动联网下载陌生代码或执行实验。
 - 主测试 `npm run check`；测试使用 Node 自带 test runner，不需要 API Key。本地验证包括 Office 可被 LibreOffice 打开并正常导出 PDF。
@@ -109,3 +109,12 @@ npm pack
 ```
 
 源码未拷贝 Mimir 的代码；仅参考其科研插件的功能组织方式。该仓库在所有者选择并发布许可之前，继续沿用既有的 `UNLICENSED` 标识。
+
+## v0.3.1 Windows Desktop 认证兼容修复
+
+- 修复 Windows DSH Desktop 在创建论文、项目书、PPT 和专利软著材料时可能返回 HTTP 403（“只允许在本机 DSH 界面中访问科研资料”）。
+- Desktop 的 `dsh-app://app` 代理先验证来源，再剥离 `Origin` 并附带 DSH 已签发的认证 Cookie。插件不再把缺失 `Origin` 当作必然非法。
+- 两条数据 API 均要求 `ctx.connection.requestRejection(req)` 通过 DSH 官方鉴权；无认证 Cookie、显式跨站 Origin、跨站 Fetch Metadata、非本机请求仍被拒绝。
+- 保留本地成果目录与文件格式，升级不迁移或删除已有成果。
+
+升级 Windows Desktop 时建议先退出应用，或在插件管理界面卸载旧版本后再安装 `v0.3.1`。

@@ -38,15 +38,33 @@ function loopbackPeer(peer) {
   const octets = v.split('.');
   return octets.length === 4 && octets[0] === '127' && octets.every(x => /^\d{1,3}$/.test(x) && Number(x) <= 255);
 }
-export function authorized(req, write = false) {
+/**
+ * Require a local peer and the official DSH Connection's authenticated browser
+ * session. In Desktop, Electron verifies `dsh-app://app`, then strips Origin
+ * and attaches the Host's signed session cookie before proxying the request.
+ * Requiring an Origin on every POST therefore breaks all Desktop writes.
+ *
+ * A missing Origin is accepted ONLY when the official Connection verifies the
+ * signed cookie and its Host/Cross-Site gates. An explicit foreign/opaque
+ * Origin is always refused, even with valid credentials. Without Connection,
+ * fail closed rather than exposing local research files to arbitrary clients.
+ */
+export function authorized(req, write = false, connection) {
   if (!isLoopback(req.headers.host) || !loopbackPeer(req.socket?.remoteAddress)) return false;
+  if (req.headers['sec-fetch-site'] === 'cross-site') return false;
   const origin = req.headers.origin;
-  if (write && typeof origin !== 'string') return false;
-  if (origin === undefined) return true;
-  try {
-    const parsed = new URL(origin);
-    return ['http:', 'https:'].includes(parsed.protocol) && parsed.host === req.headers.host;
-  } catch { return false; }
+  if (origin !== undefined) {
+    if (typeof origin !== 'string') return false;
+    try {
+      const parsed = new URL(origin);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.host !== req.headers.host) return false;
+    } catch { return false; }
+  }
+  // `write` remains in this public signature for callers; both read and write
+  // requests now require the same authenticated DSH browser principal.
+  if (typeof connection?.requestRejection !== 'function') return false;
+  try { return connection.requestRejection(req) === undefined; }
+  catch { return false; }
 }
 
 function validateTitle(title) {
@@ -348,13 +366,13 @@ export function createPaperService(options = {}) {
     const start = req.url?.split('?')[0] || '';
     if (!start.startsWith(PREFIX)) return sendJson(res, 404, { ok: false, error: 'NOT_FOUND' });
     const write = !['GET', 'HEAD'].includes(req.method);
-    if (!authorized(req, write)) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '只允许在本机 DSH 界面中访问科研资料' });
+    if (!authorized(req, write, options.connection)) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '只允许在本机 DSH 界面中访问科研资料' });
     try {
       const url = new URL(req.url, 'http://127.0.0.1');
       const rest = url.pathname.slice(PREFIX.length);
       if (rest === '/health' && req.method === 'GET') {
         await fs.mkdir(root, { recursive: true });
-        return sendJson(res, 200, { ok: true, version: '0.3.0', tectonic: await probe(), dataDir: root });
+        return sendJson(res, 200, { ok: true, version: '0.3.1', tectonic: await probe(), dataDir: root });
       }
       if (rest === '/papers') {
         if (req.method === 'GET') return sendJson(res, 200, { ok: true, projects: await list() });

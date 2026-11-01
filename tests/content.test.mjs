@@ -8,6 +8,8 @@ import {createContentService,ContentError,templateCatalog} from '../src/workbenc
 import {makeDocx,makePptx,zipEntries,makeMarkdown} from '../src/workbench/office.js';
 import {registerResearchTools} from '../src/workbench/tools.js';
 import {createPaperService} from '../src/papers.js';
+const testConnection={requestRejection:req=>req.headers.cookie==='dsh-test-session=valid'?undefined:401};
+
 const unpack=(b)=>{
   // deterministic zip local headers; enough to inspect OOXML without an npm dependency.
   const z=Buffer.isBuffer(b)?b:Buffer.from(b);
@@ -24,7 +26,7 @@ const unpack=(b)=>{
 };
 import {inflateRawSync} from 'node:zlib';
 const awaitInflate=b=>inflateRawSync(b);
-async function fixture(t){const root=await mkdtemp(join(tmpdir(),'rwb-four-'));t.after(()=>rm(root,{recursive:true,force:true}));return createContentService({root});}
+async function fixture(t){const root=await mkdtemp(join(tmpdir(),'rwb-four-'));t.after(()=>rm(root,{recursive:true,force:true}));return createContentService({root,connection:testConnection});}
 
 test('templates cover proposal, presentation, patent, and software copyright',()=>{
  const all=templateCatalog();
@@ -105,21 +107,35 @@ test('HTTP endpoints enforce loopback origin and return DOCX/PPTX downloads',asy
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  t.after(()=>new Promise(resolve=>server.close(resolve)));
  const base=`http://127.0.0.1:${server.address().port}`;
- const request=(url,body,origin=base)=>fetch(base+url,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)});
+ const request=(url,body,origin=base)=>fetch(base+url,{method:'POST',headers:{origin,cookie:'dsh-test-session=valid','content-type':'application/json'},body:JSON.stringify(body)});
  assert.equal((await request('/research-workbench/content/proposal',{title:'Test',templateId:'research'},'https://evil.com')).status,403);
  const response=await request('/research-workbench/content/proposal',{title:'Local proposal',templateId:'research'});
  assert.equal(response.status,201);
  const {item}=await response.json();
- const dl=await fetch(base+`/research-workbench/content/proposal/${item.id}/export?format=docx`);
+ const dl=await fetch(base+`/research-workbench/content/proposal/${item.id}/export?format=docx`,{headers:{cookie:'dsh-test-session=valid'}});
  assert.equal(dl.status,200);
  assert.match(dl.headers.get('content-type'),/wordprocessingml/);
  assert.ok((await dl.arrayBuffer()).byteLength>1000);
  const createdPpt=await request('/research-workbench/content/proposal/'+item.id+'/to-slides',{});
  assert.equal(createdPpt.status,201);
  const slideId=(await createdPpt.json()).item.id;
- const deck=await fetch(base+`/research-workbench/content/slides/${slideId}/export?format=pptx`);
+ const deck=await fetch(base+`/research-workbench/content/slides/${slideId}/export?format=pptx`,{headers:{cookie:'dsh-test-session=valid'}});
  assert.equal(deck.status,200);assert.match(deck.headers.get('content-type'),/presentationml/);
  assert.ok((await deck.arrayBuffer()).byteLength>1000);
+ // Desktop's authenticated Electron proxy drops Origin. It must still be able
+ // to create documents and download them, while the same request without the
+ // DSH session cookie remains forbidden.
+ const desktop=await fetch(base+'/research-workbench/content/ip',{
+  method:'POST',headers:{cookie:'dsh-test-session=valid','content-type':'application/json'},
+  body:JSON.stringify({title:'Desktop patent',templateId:'patent'})
+ });
+ assert.equal(desktop.status,201);
+ assert.equal((await fetch(base+'/research-workbench/content/ip',{
+  method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({title:'Unauthenticated',templateId:'patent'})
+ })).status,403);
+ assert.equal((await fetch(base+'/research-workbench/content/ip',{headers:{cookie:'dsh-test-session=valid','sec-fetch-site':'cross-site'}})).status,403);
+
 });
 
 test('agent tool registry enables artifact CRUD with version protection',async t=>{

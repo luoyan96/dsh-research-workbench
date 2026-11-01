@@ -157,7 +157,7 @@ export function createContentService(options={}){
   return await update('slides',out.id,doc,out.revision);
  }
  async function handle(req,res){
-  if(!authorized(req,req.method!=='GET'&&req.method!=='HEAD'))return send(res,403,{ok:false,code:'FORBIDDEN',error:'仅允许本机 DSH 页面访问'});
+  if(!authorized(req,req.method!=='GET'&&req.method!=='HEAD',options.connection))return send(res,403,{ok:false,code:'FORBIDDEN',error:'仅允许本机 DSH 页面访问'});
   try{
    const url=new URL(req.url||'', 'http://localhost');
    if(url.pathname===CONTENT_API+'/templates'&&req.method==='GET')return send(res,200,{ok:true,templates:templateCatalog()});

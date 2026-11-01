@@ -1,7 +1,7 @@
 {
   "name": "dsh-research-workbench",
-  "version": "0.3.0",
-  "description": "DSH-native project proposal, editable PowerPoint, LaTeX paper and patent/software copyright workbenches",
+  "version": "0.3.1",
+  "description": "DSH-native project proposal, editable PowerPoint, LaTeX paper and patent/software copyright workbenches (Desktop authentication fix)",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {

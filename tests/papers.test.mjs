@@ -6,10 +6,18 @@ import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { createPaperService, authorized } from '../src/papers.js';
 
+// Simulation of DSH's signed-cookie admission. Production uses ctx.connection.
+const testConnection = {
+  requestRejection(req) {
+    return req.headers.cookie === 'dsh-test-session=valid' ? undefined : 401;
+  },
+};
+
+
 async function fixture(t, tectonic) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-rwb-test-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  return createPaperService({ root, ...(tectonic ? { tectonic } : {}) });
+  return createPaperService({ root, ...(tectonic ? { tectonic } : {}), connection: testConnection });
 }
 
 function rejectsCode(promise, code) {
@@ -66,26 +74,46 @@ test('loopback-only HTTP API rejects cross-site writes and provides persistent p
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
   const url = `http://127.0.0.1:${server.address().port}`;
-  const post = (origin, body) => fetch(url + '/research-workbench/api/papers', { method:'POST', headers: { origin, 'content-type':'application/json' }, body:JSON.stringify(body) });
+  const post = (origin, body) => fetch(url + '/research-workbench/api/papers', { method:'POST', headers: { origin, cookie:'dsh-test-session=valid', 'content-type':'application/json' }, body:JSON.stringify(body) });
   assert.equal((await post('https://example.invalid', {title:'Cross origin'})).status, 403);
   const created = await post(url, {title:'Research from DSH'});
   assert.equal(created.status, 201);
   const project = (await created.json()).project;
   assert.equal(project.title, 'Research from DSH');
-  const listed = await fetch(url + '/research-workbench/api/papers');
+  const listed = await fetch(url + '/research-workbench/api/papers', {headers: {cookie:'dsh-test-session=valid'}});
   assert.equal((await listed.json()).projects.length, 1);
-  const file = await fetch(url + `/research-workbench/api/papers/${project.id}/file?path=main.tex`);
+  const file = await fetch(url + `/research-workbench/api/papers/${project.id}/file?path=main.tex`, {headers:{cookie:'dsh-test-session=valid'}});
   assert.equal(file.status, 200);
   assert.match((await file.json()).content, /Research from DSH/);
-  assert.equal((await fetch(url + '/research-workbench/api/papers/foo/file?path=main.tex')).status, 400);
-  assert.equal((await fetch(url + `/research-workbench/api/papers/${project.id}/file?path=..%2Fsecret.tex`)).status, 400);
+  assert.equal((await fetch(url + '/research-workbench/api/papers/foo/file?path=main.tex', {headers:{cookie:'dsh-test-session=valid'}})).status, 400);
+  assert.equal((await fetch(url + `/research-workbench/api/papers/${project.id}/file?path=..%2Fsecret.tex`, {headers:{cookie:'dsh-test-session=valid'}})).status, 400);
   const content = await service.readSource(project.id, 'main.tex');
   const edit = await fetch(url + `/research-workbench/api/papers/${project.id}/file?path=main.tex`, {
-    method:'PUT',headers:{origin:url,'content-type':'application/json'},
+    method:'PUT',headers:{origin:url,cookie:'dsh-test-session=valid','content-type':'application/json'},
     body:JSON.stringify({content:content.content+'\n% From Web API',expectedSha:content.sha}),
   });
   assert.equal(edit.status, 200);
   assert.match((await service.readSource(project.id, 'main.tex')).content, /From Web API/);
+  // Desktop's authenticated proxy forwards the Host's signed cookie but strips
+  // Origin, including for POST/PUT. Missing Origin alone must not reject it.
+  const desktopCreate = await fetch(url + '/research-workbench/api/papers', {
+    method:'POST',headers:{cookie:'dsh-test-session=valid','content-type':'application/json'},
+    body:JSON.stringify({title:'Desktop paper'}),
+  });
+  assert.equal(desktopCreate.status,201);
+  assert.equal((await desktopCreate.json()).project.title,'Desktop paper');
+  assert.equal((await fetch(url + '/research-workbench/api/papers', {
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({title:'Unauthenticated'}),
+  })).status,403);
+  assert.equal((await fetch(url + '/research-workbench/api/papers', {
+    method:'POST',headers:{origin:'null',cookie:'dsh-test-session=valid','content-type':'application/json'},
+    body:JSON.stringify({title:'Opaque origin'}),
+  })).status,403);
+  assert.equal((await fetch(url + '/research-workbench/api/papers', {
+    headers:{cookie:'dsh-test-session=valid','sec-fetch-site':'cross-site'},
+  })).status,403);
+
 });
 
 test('Tectonic compilation uses approved binary and produces a retrievable PDF', { skip: process.platform === 'win32' }, async t => {
@@ -110,10 +138,11 @@ test('Tectonic compilation uses approved binary and produces a retrievable PDF',
 
 test('Cordis host plugin registers and disposes both WebServer API prefixes', async () => {
   const host = await import('../src/index.js');
-  assert.deepEqual(host.inject, ['webServer']);
+  assert.deepEqual(host.inject, ['webServer', 'connection']);
   const registrations = [];
   const effectDisposers = [];
   const ctx = {
+    connection: testConnection,
     webServer: { register(route) {
       registrations.push(route);
       return () => registrations.splice(registrations.indexOf(route), 1);
@@ -134,6 +163,7 @@ test('Cordis host activates model-facing tools only if tools service exists', as
   const disposers=[];
   const specs=[];
   const ctx={
+    connection:testConnection,
     webServer:{register(r){registrations.push(r);return()=>{};}},
     tools:{register(spec){specs.push(spec);return()=>{specs.splice(specs.indexOf(spec),1);}}},
     effect(factory){disposers.push(factory());},

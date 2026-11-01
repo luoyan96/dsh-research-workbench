@@ -29,7 +29,8 @@
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "npm run build && npm test",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "npm pack --dry-run",
+    "prepack": "npm run build"
   },
   "files": [
     "lib/index.js",
@@ -38,5 +39,25 @@
     "README.md"
   ],
   "license": "UNLICENSED",
-  "keywords": ["deepseek-harness", "dsh", "research", "papers", "slides", "experiments", "project-management"]
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "research",
+    "papers",
+    "slides",
+    "experiments",
+    "project-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luoyan96/dsh-research-workbench.git"
+  },
+  "homepage": "https://github.com/luoyan96/dsh-research-workbench#readme",
+  "bugs": {
+    "url": "https://github.com/luoyan96/dsh-research-workbench/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

@@ -17,23 +17,34 @@
 
 每个入口对应 DSH **中央主内容区**的一整页，不是弹窗。页面包含说明、后续模块规划、跨模块快捷导航，以及实际生效的「返回聊天」按钮。四个模块页面相互切换时，不会主动变更 DSH 当前的 Session / Workspace。
 
-## Windows：直接安装预构建包（推荐）
+## 安装方式
 
-无需单独安装 TypeScript、Vite 或 pnpm。下载 `dsh-research-workbench-0.1.0.tgz` 后，在 PowerShell 执行：
+### npm Registry 一键安装（**首次公开发布完成后**）
 
 ```powershell
-# 请将路径改为实际下载位置
+dsh plugin --profile web add dsh-research-workbench@latest
+dsh web
+```
+
+> **状态说明**：本仓库已准备 npm 包及发布自动化；在 npm Registry 真正出现 `dsh-research-workbench` 之前，上述 `@latest` 命令仍然无法工作。参见 [首次发布与自动化配置](RELEASING.md)。
+
+### 直接从 GitHub 安装（代码实际推送至 `main` 后即可）
+
+```powershell
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
+dsh web
+```
+
+### 本地 npm 压缩包（无需等待发布）
+
+先下载打包后的 `dsh-research-workbench-0.1.0.tgz`，在 PowerShell 执行：
+
+```powershell
 dsh plugin --profile web add "C:\Users\你\Downloads\dsh-research-workbench-0.1.0.tgz"
 dsh web
 ```
 
-如果此前已打开 `dsh web`，需要先停止、再重新运行。刷新浏览器可使用 `Ctrl+Shift+R`。
-
-卸载插件：
-
-```powershell
-dsh plugin --profile web remove dsh-research-workbench
-```
+如果已打开 `dsh web`，先停止再运行，浏览器可用 `Ctrl+Shift+R` 硬刷新。卸载使用 `dsh plugin --profile web remove dsh-research-workbench`。
 
 ## Windows：从源码安装
 
@@ -85,3 +96,9 @@ tests/             # Node 自带测试框架的注册 / 生命周期检查
 下一阶段再独立接入：论文 / LaTeX、PPTX 生成编辑、科研实验、项目任务及 Agent 可调用的工具接口。当前页面所列这些能力只是规划，不应视为已实现。
 
 此仓库的最终开源许可证尚待仓库所有者决定，因此包清单暂标记为 `UNLICENSED`。发布之前需要选定许可证。
+
+## GitHub Actions 与 npm 发布
+
+- `.github/workflows/ci.yml`：`main` 提交与 PR 自动测试、检查 npm 打包。
+- `.github/workflows/publish.yml`：Git tag 匹配包版本后通过 npm Trusted Publishing (OIDC) 发布；首次发布仍需仓库所有者登录 npm 并配置可信发布者。
+- 完整说明参见 [RELEASING.md](RELEASING.md)。

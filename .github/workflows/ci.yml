@@ -1,0 +1,25 @@
+name: Validate DSH plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install from lockfile
+        run: npm ci --ignore-scripts
+      - name: Test the host and browser bundle contracts
+        run: npm run check
+      - name: Check npm package contents
+        run: npm pack --dry-run

@@ -1,7 +1,7 @@
 {
   "name": "dsh-research-workbench",
-  "version": "0.2.0",
-  "description": "Native research workspace for DeepSeek Harness Web UI, with persistent LaTeX projects and Tectonic compilation",
+  "version": "0.3.0",
+  "description": "DSH-native project proposal, editable PowerPoint, LaTeX paper and patent/software copyright workbenches",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -36,6 +36,7 @@
     "lib/index.js",
     "lib/client.js",
     "lib/papers.js",
+    "lib/workbench/*.js",
     "cordis.patch.yml",
     "README.md"
   ],
@@ -44,10 +45,12 @@
     "deepseek-harness",
     "dsh",
     "research",
-    "papers",
-    "slides",
-    "experiments",
-    "project-management"
+    "proposal",
+    "pptx",
+    "docx",
+    "latex",
+    "patent",
+    "software-copyright"
   ],
   "repository": {
     "type": "git",

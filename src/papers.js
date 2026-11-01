@@ -354,7 +354,7 @@ export function createPaperService(options = {}) {
       const rest = url.pathname.slice(PREFIX.length);
       if (rest === '/health' && req.method === 'GET') {
         await fs.mkdir(root, { recursive: true });
-        return sendJson(res, 200, { ok: true, version: '0.2.0', tectonic: await probe(), dataDir: root });
+        return sendJson(res, 200, { ok: true, version: '0.3.0', tectonic: await probe(), dataDir: root });
       }
       if (rest === '/papers') {
         if (req.method === 'GET') return sendJson(res, 200, { ok: true, projects: await list() });

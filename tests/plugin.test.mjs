@@ -11,6 +11,7 @@ function makeReact() {
     useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
     useRef: initial => ({ current: initial }),
     useEffect: () => {},
+    useCallback: cb => cb,
     createElement: (type, props, ...children) => ({
       type,
       props: {
@@ -111,6 +112,7 @@ test('checked-in client artifacts are exactly regenerated from their source', as
   assert.equal(await read('lib/client.js'), await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
+  for (const name of ['content','office','tools']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
 test('browser module registers four native DSH main pages and sidebar rows in order', async () => {
@@ -137,37 +139,43 @@ test('browser module registers four native DSH main pages and sidebar rows in or
   assert.equal(main.length, 4);
   assert.equal(sidebar.length, 4);
   assert.deepEqual(main.map(x => x.options.key), [
-    'research-papers', 'research-slides', 'research-experiments', 'research-projects',
+    'research-proposals', 'research-slides', 'research-papers', 'research-ip',
   ]);
   assert.deepEqual(sidebar.map(x => [x.options.id, x.options.label, x.options.order]), [
-    ['research-papers', '论文管理', 20],
+    ['research-proposals', '项目书', 20],
     ['research-slides', 'PPT 工作台', 30],
-    ['research-experiments', '科研实验', 40],
-    ['research-projects', '项目进度', 50],
+    ['research-papers', '论文管理', 40],
+    ['research-ip', '专利与软著', 50],
   ]);
   assert.equal(host.elementStyles.length, 1);
-  assert.match(host.elementStyles[0].textContent, /\.drw-page/);
+  assert.match(host.elementStyles[0].textContent, /\.drw-artifact-workspace/);
   for (const record of sidebar) {
     const icon = record.Component({ size: 20, active: false });
     assert.equal(typeof icon.type, 'function');
   }
 
-  const paper = main[0];
-  const page = paper.Component(paper.options.inject());
-  assert.match(textOf(page), /论文管理/);
-  assert.match(textOf(page), /LaTeX 编辑/);
-  assert.match(textOf(page), /正在加载本地论文项目/);
-  const buttons = flatten(page).filter(x => x?.type === 'button');
-  const returnChat = buttons.find(x => textOf(x).includes('返回聊天'));
+  const proposal = main[0];
+  const proposalPage = proposal.Component(proposal.options.inject());
+  assert.match(textOf(proposalPage), /项目书/);
+  assert.match(textOf(proposalPage), /新建一份结构完整/);
+  const returnChat = flatten(proposalPage).filter(x => x?.type === 'button').find(x => textOf(x).includes('返回聊天'));
   assert.ok(returnChat);
   await returnChat.props.onClick();
   assert.equal(host.selected.at(-1), null);
-  assert.equal(main[1].options.key, 'research-slides');
-  const slides = main[1].Component(main[1].options.inject());
-  const navigate = flatten(slides).filter(x => x?.type === 'button').find(x => textOf(x).includes('科研实验'));
-  assert.ok(navigate);
-  navigate.props.onClick();
-  assert.equal(host.selected.at(-1), 'research-experiments');
+
+  const paper = main[2];
+  const paperPage = paper.Component(paper.options.inject());
+  assert.match(textOf(paperPage), /论文管理/);
+  assert.match(textOf(paperPage), /正在加载本地论文项目/);
+  const buttons = flatten(paperPage).filter(x => x?.type === 'button');
+  const paperReturn = buttons.find(x => textOf(x).includes('返回聊天'));
+  assert.ok(paperReturn);
+  await paperReturn.props.onClick();
+  assert.equal(host.selected.at(-1), null);
+  const slidePage = main[1].Component(main[1].options.inject());
+  assert.match(textOf(slidePage), /PPT 工作台/);
+  const ipPage = main[3].Component(main[3].options.inject());
+  assert.match(textOf(ipPage), /专利与软著/);
 
   // The component cannot silently replace the existing DSH brand or chat panel.
   assert.ok(!main.some(x => x.options.key === 'conversation'));

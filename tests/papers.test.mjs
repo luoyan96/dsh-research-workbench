@@ -108,7 +108,7 @@ test('Tectonic compilation uses approved binary and produces a retrievable PDF',
   assert.match((await service.pdf(p.id)).toString(), /%PDF-1.4/);
 });
 
-test('Cordis host plugin registers and disposes only its own WebServer prefix', async () => {
+test('Cordis host plugin registers and disposes both WebServer API prefixes', async () => {
   const host = await import('../src/index.js');
   assert.deepEqual(host.inject, ['webServer']);
   const registrations = [];
@@ -121,10 +121,28 @@ test('Cordis host plugin registers and disposes only its own WebServer prefix', 
     effect(factory) { effectDisposers.push(factory()); },
   };
   host.apply(ctx);
-  assert.equal(registrations.length, 1);
-  assert.equal(registrations[0].kind, 'prefix');
-  assert.equal(registrations[0].path, '/research-workbench/api');
-  assert.equal(typeof registrations[0].handler, 'function');
+  assert.equal(registrations.length, 2);
+  assert.deepEqual(registrations.map(r=>r.path), ['/research-workbench/api','/research-workbench/content']);
+  for (const r of registrations) { assert.equal(r.kind, 'prefix'); assert.equal(typeof r.handler,'function'); }
   for (const dispose of effectDisposers) dispose();
   assert.equal(registrations.length, 0);
+});
+
+test('Cordis host activates model-facing tools only if tools service exists', async () => {
+  const host=await import('../src/index.js');
+  const registrations=[];
+  const disposers=[];
+  const specs=[];
+  const ctx={
+    webServer:{register(r){registrations.push(r);return()=>{};}},
+    tools:{register(spec){specs.push(spec);return()=>{specs.splice(specs.indexOf(spec),1);}}},
+    effect(factory){disposers.push(factory());},
+    inject(names,cb){assert.deepEqual(names,['tools']);cb(this);},
+  };
+  host.apply(ctx);
+  assert.equal(registrations.length,2);
+  assert.equal(specs.length,7);
+  assert.ok(specs.every(s=>s.parameters.type==='object'&&s.output.schema.type==='string'));
+  for (const dispose of disposers.reverse()) dispose();
+  assert.equal(specs.length,0);
 });

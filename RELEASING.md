@@ -1,55 +1,33 @@
-# Release workflow · DSH Research Workbench
+# 版本发布说明
 
-Current package name: **`dsh-research-workbench`**. This project is a native DSH plugin (not a generic npm library).
+当前版本：`dsh-research-workbench@0.3.0`。`main` 合并后可以通过 GitHub 地址安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。
 
-## Installing
+## 发布到 GitHub
 
-Once `dsh-research-workbench` is **actually published** to the public npm registry:
+本次通过 Git bundle/ZIP 或 GitHub 连接写入更新 `main`。请在 Windows DSH 安装新版本前完全退出客户端，移除旧版再安装。项目数据位于 `~/.dsh/research-workbench`，不在安装包目录下。
 
-```powershell
-dsh plugin --profile web add dsh-research-workbench@latest
-dsh web
+## 第一次 npm 发布（仅包所有者操作）
+
+在项目目录中运行：
+
+```bash
+npm ci --ignore-scripts
+npm run check
+npm pack --dry-run
+npm login
+npm publish --access public
 ```
 
-Before the first npm publication, **a GitHub repository with the code pushed** also supports one-command installation:
+发布前确认 `license: UNLICENSED` 是否符合你的分发意图。确认模块在 Windows DSH 上真正可用后，再发布到公共 npm。
 
-```powershell
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
-dsh web
-```
+在 npm 官网的包 Settings → Trusted Publishing 页面选择 GitHub Actions，填入：
 
-Do not use `@latest` until npm shows a published version. A local `npm pack` tarball is an npm package, but `npm pack` does **not** publish it to the registry.
+- Owner: `luoyan96`
+- Repository: `dsh-research-workbench`
+- Workflow: `publish.yml`
 
-## First npm publication (one-time, owner action)
+后续更新版本号、推送 tag，例如 `v0.3.1`，才会触发 `publish.yml`。不要对尚未发布的版本反复推同一个 tag。正式发布之前请确认 npm 项目名称归属及登录信息，**不要在聊天中提供 npm Token**。
 
-The first publication needs an npmjs.com account authorized to claim this package name. Verify the name is available and never share your npm credentials or access token in chats or commits.
+## 可靠性和已知限制
 
-1. Push `main` to the GitHub repository; CI should pass. From a Windows terminal with Node/npm configured, run `npm login` in your project directory and complete npm's interactive browser/2FA flow.
-2. Verify the package name and version: `npm pkg get name version`; then `npm run check` and `npm pack --dry-run`.
-3. Publish the first version: `npm publish --access public`. This is an explicit, public, irreversible release of this version; use your own npm account.
-4. On npmjs.com open the published package's **Settings → Trusted Publishing** and choose GitHub Actions. Enter:
-   - Owner: `luoyan96`
-   - Repository: `dsh-research-workbench`
-   - Workflow filename: **`publish.yml`**
-   - Allowed action: **`npm publish`**
-   - Optional GitHub Environment: none (unless you separately configure one)
-5. For later versions, update `package.json` / `package-lock.json`, merge tested changes into `main`, and create/push a matching version tag. The GitHub workflow publishes through OIDC; no long-lived `NPM_TOKEN` secret is required.
-
-`publish.yml` deliberately triggers only on a version tag. It checks that the tag matches `package.json` before publishing and runs the same local tests and packing steps. `ci.yml` validates normal pushes to `main`.
-
-Example for **a future new version**, after the version is incremented and committed:
-
-```powershell
-npm version patch
-git push origin main --follow-tags
-```
-
-Do **not** run `npm version patch` before the **first** publish, otherwise npm will treat the initial version as skipped. Do not push a a version tag that triggers automatic publishing until the npm trusted publisher is configured.
-
-## Repo permissions / limitations
-
-- GitHub repository admin permissions shown by a connector do not guarantee it can write contents. `403 Resource not accessible by integration` means a GitHub App installation/permission must be corrected or the owner must push through authenticated Git locally.
-- This plugin is `UNLICENSED` until its owner chooses an explicit source license. Public npm availability is not a license grant.
-- The UI skeleton is not yet tested against your running Windows DSH instance, and does not yet implement LaTeX, PPT generation, experimental execution, or real project management.
-
-Reference: <https://docs.npmjs.com/trusted-publishers/>.
+目前通过离线自动测试、OOXML 解包和 LibreOffice 渲染，**未执行你当前 Windows DSH 实机的完整 UI/Agent 验证**。在确认工具调用、导出和自动保存符合预期前，暂不建议将此版公开推广给其他用户。

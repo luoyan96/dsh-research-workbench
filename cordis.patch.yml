@@ -1,0 +1,4 @@
+# Self-activates after: dsh plugin --profile web add <package.tgz>
+- insert:
+    - id: research-workbench
+      name: 'dsh-research-workbench'

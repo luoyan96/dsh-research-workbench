@@ -1,7 +1,7 @@
 {
   "name": "dsh-research-workbench",
-  "version": "0.1.0",
-  "description": "Native research workspace panels for DeepSeek Harness Web UI",
+  "version": "0.2.0",
+  "description": "Native research workspace for DeepSeek Harness Web UI, with persistent LaTeX projects and Tectonic compilation",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -35,6 +35,7 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/papers.js",
     "cordis.patch.yml",
     "README.md"
   ],

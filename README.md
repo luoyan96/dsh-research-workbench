@@ -1,104 +1,86 @@
 # DSH Research Workbench（科研工作台）
 
-面向 **DeepSeek Harness（DSH）Web UI** 的原生科研工作台插件。基于 DSH 官方的 Cordis + Slots 机制新增导航和主页面，**不 Fork DSH、不覆盖 DOM、不修改左上角品牌、原生聊天、工作区和已有插件**。
+基于 **DeepSeek Harness (DSH)** 的 Cordis + Slots 插件，原生集成「论文管理」「PPT 工作台」「科研实验」「项目进度」四个左侧导航入口，不 Fork DSH，不替换原生聊天 / 工作区 / Logo。
 
-> **当前版本 v0.1.0 是第一阶段的可安装 UI 骨架。** 论文管理、PPT、实验执行和项目管理的完整业务能力尚未实现；本版本重点验证插件安装、原生导航、页面切换与 DSH 兼容性。
+## v0.2.0 — 论文管理可用版本
 
-## 第一版包含什么
+**论文管理**现在具有真实的后台功能，不再只是导航占位页：
 
-插件会在 DSH 左侧的「插件」（`order: 0`）和「自动化任务」（`order: 10`）后依次增加四个入口：
+- 新建、重命名、归档论文项目；自动创建 `main.tex` 与 `references.bib`。
+- 浏览和编辑 `.tex` / `.bib` / `.sty` / `.cls` / `.txt` 文件；支持自动保存与 `Ctrl+S`、多文件目录、文件 SHA-256 版本冲突保护。
+- 导入论文源文件、论文插图和已有 PDF 文件（每个不超过 20 MiB；同名文件不会被静默覆盖）。
+- 通过 DSH 后端直接调用本机 **Tectonic**，成功后预览、下载编译出的 `main.pdf`，失败时保留编译日志和上次成功的 PDF。
+- 论文项目、源文件和 PDF 保存在 **`~/.dsh/research-workbench/papers/`**（Windows 是 `C:\Users\用户名\.dsh\research-workbench\papers\`），不依赖浏览器 localStorage。
 
-| 侧栏入口 | 主页面 key | 显示顺序 |
-| --- | --- | --- |
-| 论文管理 | `research-papers` | 20 |
-| PPT 工作台 | `research-slides` | 30 |
-| 科研实验 | `research-experiments` | 40 |
-| 项目进度 | `research-projects` | 50 |
+其他三个入口仍是原生页面骨架，PPT 编辑器、真实实验执行和项目任务看板尚未开发。
 
-每个入口对应 DSH **中央主内容区**的一整页，不是弹窗。页面包含说明、后续模块规划、跨模块快捷导航，以及实际生效的「返回聊天」按钮。四个模块页面相互切换时，不会主动变更 DSH 当前的 Session / Workspace。
-
-## 安装方式
-
-### npm Registry 一键安装（**首次公开发布完成后**）
-
-```powershell
-dsh plugin --profile web add dsh-research-workbench@latest
-dsh web
-```
-
-> **状态说明**：本仓库已准备 npm 包及发布自动化；在 npm Registry 真正出现 `dsh-research-workbench` 之前，上述 `@latest` 命令仍然无法工作。参见 [首次发布与自动化配置](RELEASING.md)。
-
-### 直接从 GitHub 安装（代码实际推送至 `main` 后即可）
+### 从 GitHub 安装
 
 ```powershell
 dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
-dsh web
 ```
 
-### 本地 npm 压缩包（无需等待发布）
-
-先下载打包后的 `dsh-research-workbench-0.1.0.tgz`，在 PowerShell 执行：
+如果已安装 v0.1.0，先停止 DSH，再执行：
 
 ```powershell
-dsh plugin --profile web add "C:\Users\你\Downloads\dsh-research-workbench-0.1.0.tgz"
-dsh web
+dsh plugin --profile web remove dsh-research-workbench
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
 ```
 
-如果已打开 `dsh web`，先停止再运行，浏览器可用 `Ctrl+Shift+R` 硬刷新。卸载使用 `dsh plugin --profile web remove dsh-research-workbench`。
+重启 DSH Web 或桌面客户端，必要时 `Ctrl+Shift+R` 硬刷新。**上述 GitHub 命令只有在 v0.2.0 提交实际推送至 main 后才会安装新版本。** 也可以直接安装本项目打包的 `dsh-research-workbench-0.2.0.tgz`。
 
-## Windows：从源码安装
+### LaTeX 编译需要 Tectonic
 
-Node.js 22+ 即可，本阶段 **没有 npm 运行时依赖，也不需要联网安装构建工具**：
+本版使用本机的 Tectonic 编译器，不会在后台自动下载安装可执行程序。安装并确认以下命令有效：
 
 ```powershell
-cd C:\path\to\dsh-research-workbench
+tectonic --version
+```
+
+如果不想设置环境变量，Windows 上可将官方 `tectonic.exe` 放在 `C:\Tools\Tectonic\tectonic.exe`。后台也支持管理员设置 `DSH_RWB_TECTONIC_PATH` 指向受信任的编译器绝对路径。修改环境变量后需要重启 DSH。
+
+Tectonic 首次编译可能需要网络获取 TeX 宏包。**只编译你信任的 LaTeX 项目**；TeX 编译器是本地进程，不是安全沙箱。不要把陌生人提供的文档作为受信任代码自动编译。
+
+官方 Tectonic 发布页：<https://github.com/tectonic-typesetting/tectonic/releases>。
+
+### 用户使用流程
+
+1. 点击左侧 **论文管理**，输入论文标题并创建项目。
+2. 选择 `main.tex`，编辑论文并保存（支持自动保存）。
+3. 点击 **编译 PDF**；若已安装 Tectonic，PDF 将显示在右侧。
+4. 可添加 `sections/method.tex` 等子文件，在 `main.tex` 中使用 `\input{sections/method}` 引用。
+5. 必要时导入 `.bib` 或论文图片，或将选中的源文件下载备份。
+
+### 功能与限制
+
+| 模块 | v0.2.0 实际状态 |
+| --- | --- |
+| 论文管理 | 已实现本地项目与文本编辑 |
+| Tectonic 编译 | 已实现接口，需本机已安装编译器 |
+| PDF 预览 | 已实现，桌面客户端 PDF 显示仍需真实环境验证 |
+| PPT 工作台 | 原生页面骨架 |
+| 科研实验 | 原生页面骨架 |
+| 项目进度 | 原生页面骨架 |
+| Agent 可调用的论文工具 | 下一个开发阶段 |
+| 在线文献检索 / 模板库 | 下一个开发阶段 |
+| 一键安装 Tectonic | 尚未实现 |
+
+### 本地测试与打包
+
+只需要 Node.js >=22，不需要先安装其他 npm 构建依赖：
+
+```powershell
+npm ci --ignore-scripts
 npm run check
 npm pack
-
-# 生成 dsh-research-workbench-0.1.0.tgz，按上文安装
 ```
 
-开发者也可以安装本地工作目录：
+Host 插件依赖 DSH `webServer` 服务，浏览器使用 DSH 原生 `main` 与 `sidebar.panellist` 插槽。API 仅服务本机回环地址，写操作要求同源；项目和文件路径限制在插件专属目录，保存采用原子写和版本检查。
 
-```powershell
-dsh plugin --profile web add "link:$($PWD.Path)"
-dsh web
-```
+这版提供了 9 项离线自动测试（包括宿主 API、路径保护、伪 Tectonic 编译测试和 DSH 插槽模拟）。**尚未在实际 DSH Desktop 上验收论文编辑器交互**，因此发布前需要在你当前 Windows DSH 版本上测试。
 
-## 第一轮验收清单
+## 发布
 
-1. 左侧「插件」「自动化任务」「更多」「工作区」保持原状。
-2. 「自动化任务」后依次出现「论文管理」「PPT 工作台」「科研实验」「项目进度」四项，图标尺寸与 DSH 原生导航一致。
-3. 点击每个入口，中央区域出现对应独立页面，而不是弹窗或跳转到外部网站。
-4. 点击页面右上的「返回聊天」，之前的会话和工作区不应消失。
-5. 在页面底部使用「快速切换工作台」按钮，能够切换到其他三个页面。
-6. 重启 DSH 后入口仍可用，卸载后入口及附加样式消失。
-7. 将截图和浏览器控制台 / DSH 启动错误发回，用于排查实际版本兼容性。
+仓库已配置 CI 和 npm Trusted Publishing 工作流；公开 npm `@latest` 命令只在首次发布至 npm Registry 后有效。详情见 [RELEASING.md](RELEASING.md)。
 
-## 代码结构
-
-```text
-src/index.js       # Cordis Host 半侧；第一版无后台服务
-src/client.js      # 浏览器插件注册、四个原生页面、图标、样式
-lib/index.js       # 预构建 Host 工件
-lib/client.js      # 预构建浏览器工件
-cordis.patch.yml   # 安装后自动激活
-scripts/build.mjs  # 从 src 生成 lib（不依赖外部构建工具）
-tests/             # Node 自带测试框架的注册 / 生命周期检查
-```
-
-实现要点：`sidebar.panellist` 负责新增导航，`main` keyed slot 注册内容页；`ctx.layout.selectPanel(id)` 在 DSH 内部切换主页面，`selectPanel(null)` 返回原生 Conversation。样式由 `ctx.effect` 管理，插件释放时清理，无全局 DOM 强制改写。
-
-## 验证范围与下一阶段
-
-当前已通过离线注册、导航回调、样式清理等单元检查以及 `npm pack` 打包检查；**尚未在用户本机的真实 DSH 版本运行浏览器端验收**。本实现按 2026 年 11 月上游 `master` 的 Web Client Slots 约定制作，DSH 预发布版本可能发生 API 变化。
-
-下一阶段再独立接入：论文 / LaTeX、PPTX 生成编辑、科研实验、项目任务及 Agent 可调用的工具接口。当前页面所列这些能力只是规划，不应视为已实现。
-
-此仓库的最终开源许可证尚待仓库所有者决定，因此包清单暂标记为 `UNLICENSED`。发布之前需要选定许可证。
-
-## GitHub Actions 与 npm 发布
-
-- `.github/workflows/ci.yml`：`main` 提交与 PR 自动测试、检查 npm 打包。
-- `.github/workflows/publish.yml`：Git tag 匹配包版本后通过 npm Trusted Publishing (OIDC) 发布；首次发布仍需仓库所有者登录 npm 并配置可信发布者。
-- 完整说明参见 [RELEASING.md](RELEASING.md)。
+本仓库目前尚未决定开源许可证；`package.json` 的 `license` 暂设为 `UNLICENSED`，请在正式对外分发前确定授权条款。

@@ -44,7 +44,7 @@ npm version patch
 git push origin main --follow-tags
 ```
 
-Do **not** run `npm version patch` before the **first** `0.1.0` publish, otherwise npm will treat `0.1.0` as skipped. Do not push a `v0.1.0` tag that triggers automatic publishing until the npm trusted publisher is configured.
+Do **not** run `npm version patch` before the **first** publish, otherwise npm will treat the initial version as skipped. Do not push a a version tag that triggers automatic publishing until the npm trusted publisher is configured.
 
 ## Repo permissions / limitations
 

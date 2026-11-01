@@ -8,6 +8,9 @@ const read = (name) => readFile(new URL(name, root), 'utf8');
 
 function makeReact() {
   return {
+    useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useRef: initial => ({ current: initial }),
+    useEffect: () => {},
     createElement: (type, props, ...children) => ({
       type,
       props: {
@@ -107,6 +110,7 @@ test('manifest declares a DSH self-activating client bundle', async () => {
 test('checked-in client artifacts are exactly regenerated from their source', async () => {
   assert.equal(await read('lib/client.js'), await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
+  assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
 });
 
 test('browser module registers four native DSH main pages and sidebar rows in order', async () => {
@@ -151,18 +155,19 @@ test('browser module registers four native DSH main pages and sidebar rows in or
   const paper = main[0];
   const page = paper.Component(paper.options.inject());
   assert.match(textOf(page), /论文管理/);
-  assert.match(textOf(page), /LaTeX 工作流/);
-  assert.match(textOf(page), /DSH 原生页面已就绪/);
+  assert.match(textOf(page), /LaTeX 编辑/);
+  assert.match(textOf(page), /正在加载本地论文项目/);
   const buttons = flatten(page).filter(x => x?.type === 'button');
   const returnChat = buttons.find(x => textOf(x).includes('返回聊天'));
   assert.ok(returnChat);
-  returnChat.props.onClick();
+  await returnChat.props.onClick();
   assert.equal(host.selected.at(-1), null);
-  const navigate = buttons.find(x => textOf(x).includes('PPT 工作台'));
+  assert.equal(main[1].options.key, 'research-slides');
+  const slides = main[1].Component(main[1].options.inject());
+  const navigate = flatten(slides).filter(x => x?.type === 'button').find(x => textOf(x).includes('科研实验'));
   assert.ok(navigate);
   navigate.props.onClick();
-  assert.equal(host.selected.at(-1), 'research-slides');
-  assert.equal(buttons.find(x => textOf(x).includes('论文管理'))?.props.disabled, true);
+  assert.equal(host.selected.at(-1), 'research-experiments');
 
   // The component cannot silently replace the existing DSH brand or chat panel.
   assert.ok(!main.some(x => x.options.key === 'conversation'));

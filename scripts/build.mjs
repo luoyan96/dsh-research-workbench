@@ -11,5 +11,6 @@ await mkdir(resolve(root, 'lib'), { recursive: true });
 await Promise.all([
   copyFile(resolve(root, 'src/index.js'), resolve(root, 'lib/index.js')),
   copyFile(resolve(root, 'src/client.js'), resolve(root, 'lib/client.js')),
+  copyFile(resolve(root, 'src/papers.js'), resolve(root, 'lib/papers.js')),
 ]);
-console.log('Prepared DSH host + browser plugin artifacts (no external build dependencies).');
+console.log('Prepared DSH host + browser + paper service artifacts (no external build dependencies).');

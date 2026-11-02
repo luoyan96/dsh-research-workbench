@@ -1,7 +1,7 @@
 {
   "name": "dsh-research-workbench",
-  "version": "0.3.1",
-  "description": "DSH-native project proposal, editable PowerPoint, LaTeX paper and patent/software copyright workbenches (Desktop authentication fix)",
+  "version": "0.3.3",
+  "description": "DSH-native research workbench with DOCX/PPTX import and CCF conference deadline calendar",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -50,7 +50,9 @@
     "docx",
     "latex",
     "patent",
-    "software-copyright"
+    "software-copyright",
+    "ccf-deadlines",
+    "conference-calendar"
   ],
   "repository": {
     "type": "git",

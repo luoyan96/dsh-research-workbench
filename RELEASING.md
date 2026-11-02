@@ -1,6 +1,6 @@
 # 版本发布说明
 
-当前版本：`dsh-research-workbench@0.3.1`。`main` 合并后可以通过 GitHub 地址安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。
+当前版本：`dsh-research-workbench@0.3.2`。`main` 合并后可以通过 GitHub 地址安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。
 
 ## 发布到 GitHub
 
@@ -26,7 +26,7 @@ npm publish --access public
 - Repository: `dsh-research-workbench`
 - Workflow: `publish.yml`
 
-后续更新版本号、推送 tag，例如 `v0.3.1`，才会触发 `publish.yml`。不要对尚未发布的版本反复推同一个 tag。正式发布之前请确认 npm 项目名称归属及登录信息，**不要在聊天中提供 npm Token**。
+后续更新版本号、推送 tag，例如 `v0.3.3`，才会触发 `publish.yml`。不要对尚未发布的版本反复推同一个 tag。正式发布之前请确认 npm 项目名称归属及登录信息，**不要在聊天中提供 npm Token**。
 
 ## 可靠性和已知限制
 

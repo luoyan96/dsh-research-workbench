@@ -1,17 +1,33 @@
 # DSH Research Workbench · 科研成果工作台
 
-将 **项目书、PPT、论文、专利与软著** 四个原生工作台直接加入 DeepSeek Harness（DSH）左侧导航。插件采用 Cordis + Slots，使用 DSH 现有会话和工作区，不 Fork DSH、不替换品牌和主聊天界面。
+将 **项目书、PPT、论文、专利与软著、CCF 截稿日历** 五个原生工作台直接加入 DeepSeek Harness（DSH）左侧导航。插件采用 Cordis + Slots，使用 DSH 现有会话和工作区，不 Fork DSH、不替换品牌和主聊天界面。
 
-**v0.3.1** 是四个模块均可保存、编辑和导出实际文件的集成版本。已通过离线测试与 Office 文件解析/渲染验证；**Windows DSH 实机验收仍需要使用者运行本版测试**。
+**v0.3.3** 在 Office 导入（`.docx` / `.pptx`，保留原件与受限的原版式文字修改）之上，新增 CCF 投稿截止日历。已通过离线测试与 Office 文件解析/渲染验证；**Windows DSH 实机验收仍需要使用者运行本版测试**。
+
+## v0.3.3：CCF 投稿截止日历
+
+- 左侧栏增加「CCF 截稿」入口；在简体中文与英文版 DSH 中，通过有限范围的 CSS 将重复的原生「更多」按钮隐藏，原「插件」管理功能仍在「插件」页。若 DSH 更换 DOM 或语言，该隐藏可能不再生效，但日历入口仍可使用。
+- 会议信息来自 [Conference Partner](https://github.com/sundou82/conference-partner-mcp) 每日更新的 CCF 目录：展示 A/B/C 级别、未来 30/90/365 天、研究方向、搜索和本地收藏；服务器保存缓存供离线阅读。
+- 该汇总仅包含**日期**，不包含可验证的最终时刻或 AoE 时区；必须在投稿前核对官方 CFP。过期日期默认隐藏，未公布则显示待公布，绝不自行推算。
+- DSH Host API: `/research-workbench/deadlines`，复用现有 DSH Session 身份验证，不需要 API Key。
+
+## v0.3.2：直接导入 Word 与 PowerPoint
+
+- **项目书、专利软著**：导入 Word `.docx`（最大 12 MiB）；自动识别章节、标题及段落文字。旧版 `.doc` 请先在 Word 另存为 `.docx`。
+- **PPT**：导入 PowerPoint `.pptx`（最大 12 MiB），按幻灯片原始顺序提取标题、文本框和正文。旧版 `.ppt` 请先转换成 `.pptx`。
+- **原件保留**：原始文件单独保存在项目数据目录，可在工作台点击“原件下载”。未经修改时导出完全一致的原始文件字节；仅修改已有文本且原结构未变时，优先在原 OOXML 中修改文字，以保留原图片、图表、版式和其它对象。
+- **限制**：编辑器仍是结构化文本编辑，而非完整所见即所得 Office 编辑器。新增/删除章节、增删幻灯片、修改段落数量/布局，或无法安全映射的文本修改，导出为简化格式（原件不被覆盖）。对于排版敏感的正式材料，应在 Word / PowerPoint 中核对并完成最后调整。
+- Markdown / TXT 导入仍保留。**PDF、旧式二进制 `.doc/.ppt`、扫描件 OCR 暂不支持直接导入**。
 
 ## 已完成的功能
 
 | 左侧入口 | 可操作能力 | 文件 / 交付 |
 |---|---|---|
-| **项目书** | 新建、导入 Markdown、按章节编辑、自动保存、版本冲突保护、排序、增删章节、归档、**项目书 → PPT 草稿** | Word `.docx` / `.md` |
-| **PPT 工作台** | 科研答辩、组会、方案等模板；添加/删除/重排幻灯片、4 种布局、3 种配色、逐页预览、自动保存 | **可编辑** `.pptx` / `.md` |
+| **项目书** | 新建、导入 DOCX / Markdown、按章节编辑、自动保存、版本冲突保护、排序、增删章节、归档、**项目书 → PPT 草稿** | Word `.docx` / `.md` |
+| **PPT 工作台** | 导入 PPTX、科研答辩、组会、方案等模板；添加/删除/重排幻灯片、4 种布局、3 种配色、逐页预览、自动保存 | **可编辑** `.pptx` / `.md` |
 | **论文管理** | 多 LaTeX 项目、`.tex/.bib` 及图片导入、编辑、Tectonic 编译、PDF 预览与下载、归档 | `.tex` / `.bib` / `.pdf` |
 | **专利与软著** | 发明专利技术交底书和软件著作权材料模板、章节编辑、导入 Markdown、自动保存及归档 | Word `.docx` / `.md` |
+| **CCF 截稿** | A/B/C 分级、研究方向、30/90/365 天窗口、会议搜索、本地收藏、数据源时间与离线缓存 | 只读日历（无文件导出） |
 
 插件会自动把文档保存在 `~/.dsh/research-workbench/`（Windows：`C:\Users\用户名\.dsh\research-workbench\`）。更新或卸载插件不会自动删除你已有的论文项目和成果文件；v0.2.0 的论文文件继续留在原路径。
 
@@ -51,12 +67,14 @@
 
 ## 安装
 
-### 直接安装 GitHub main（先确保 v0.3.1 已推送）
+### 直接安装 GitHub main（v0.3.3 已推送）
 
 ```powershell
 dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
 dsh web
 ```
+
+Windows Desktop 使用的是 `desktop` Profile，请把 `--profile web` 换成 `--profile desktop`。
 
 如果之前装过旧版，请先**退出 DSH**，再执行：
 
@@ -71,7 +89,7 @@ dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.3.1.tgz"
+dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.3.3.tgz"
 ```
 
 ### npm 正式发布后
@@ -88,14 +106,16 @@ dsh plugin --profile web add dsh-research-workbench@latest
 2. **PPT**：从“科研答辩”模板创建，修改页面正文、新增/删除/重排页面，选择蓝白主题，下载 `.pptx` 并确认 PowerPoint 中可编辑文字。
 3. **论文**：创建 LaTeX 项目，编辑 `main.tex` 并保存，确认 Tectonic 后编译 PDF。
 4. **专利与软著**：分别新建“发明专利技术交底书”和“软件著作权申请材料”，填写一节，导出 `.docx`。
-5. 关闭并重启 DSH，确认数据仍在。跨窗口编辑同一文档时应提示版本冲突，不应静默覆盖。
-6. 在 DSH 聊天中检查 `research_artifact_list` 等 Agent 工具是否可见，确认工具调用遵循当前权限控制。
+5. **CCF 截稿**：进入左侧「CCF 截稿」，切换 A/B/C 与研究方向，确认日期与天数合理；点“更新日期”后数据时间变化；断网时应显示离线缓存提示而不是伪装成新数据；收藏后重启 DSH 仍然保留。
+6. 关闭并重启 DSH，确认数据仍在。跨窗口编辑同一文档时应提示版本冲突，不应静默覆盖。
+7. 在 DSH 聊天中检查 `research_artifact_list` 等 Agent 工具是否可见，确认工具调用遵循当前权限控制。
 
 ## 技术与安全边界
 
 - Host：`src/index.js` + `src/papers.js` + `src/workbench/`，浏览器：`src/client.js`；预构建文件位于 `lib/`。
 - 使用 `sidebar.panellist` 与 `main` keyed slots，保留原有 DSH Session/Workspace。
-- 本地 Web API：`/research-workbench/api`（论文）及 `/research-workbench/content`（项目书/PPT/知识产权）。仅允许本机 loopback，所有读写请求都必须经过 DSH Connection 有效浏览器会话认证，拒绝显式跨站 Origin；Windows Desktop 认证代理剥离 Origin 后的请求同样受认证保护。所有文件写入限制在插件数据目录。
+- 本地 Web API：`/research-workbench/api`（论文）、`/research-workbench/content`（项目书/PPT/知识产权）及 `/research-workbench/deadlines`（CCF 日历，只读 GET）。仅允许本机 loopback，所有读写请求都必须经过 DSH Connection 有效浏览器会话认证，拒绝显式跨站 Origin；Windows Desktop 认证代理剥离 Origin 后的请求同样受认证保护。所有文件写入限制在插件数据目录。
+- CCF 数据来自第三方公开快照，插件只读取外部 JSON（12 秒超时、3 MB 上限、6 小时缓存），不向会议官网发起请求，也不上传任何本地内容；缓存写入插件数据目录，断网时回退到上一次快照并明确标注“离线缓存”。
 - Office 文件导出使用纯 Node.js Open XML 生成器，无外部运行时依赖、无 Word/PowerPoint 安装要求。DOCX/PPTX 在 Word/PowerPoint 中仍需完成最终人工校对。
 - 不生成或执行 Office 宏；Patent/Softcopyright 不提供自动官方提交；不自动联网下载陌生代码或执行实验。
 - 主测试 `npm run check`；测试使用 Node 自带 test runner，不需要 API Key。本地验证包括 Office 可被 LibreOffice 打开并正常导出 PDF。

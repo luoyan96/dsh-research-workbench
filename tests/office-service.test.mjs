@@ -1,0 +1,72 @@
+/** End-to-end checks for the content service Office import/export API. */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp,readFile,rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import {join} from 'node:path';
+import { createServer } from 'node:http';
+import { createContentService } from '../src/workbench/content.js';
+import { parseImportedDocx,parseImportedPptx } from '../src/workbench/office-import.js';
+const connection={requestRejection:req=>req.headers.cookie==='dsh-test-session=valid'?undefined:401};
+const fixture=name=>readFile(new URL('./fixtures/'+name,import.meta.url));
+async function service(t){
+ const root=await mkdtemp(join(tmpdir(),'dsh-office-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ return createContentService({root,connection});
+}
+test('Office import retains original bytes; same-structure text edits retain media',async t=>{
+ const svc=await service(t);
+ const docx=await fixture('sample.docx');
+ const item=await svc.importOffice('proposal','可编辑项目书',docx,'research','sample.docx');
+ assert.equal(item.sourceFormat,'docx');
+ assert(item.doc.sections.length>=2);
+ const unedited=await svc.exportFile('proposal',item.id,'docx');
+ assert.deepEqual(unedited.bytes,docx);
+ assert.equal(unedited.fidelity,'original');
+ const sections=item.doc.sections.map(s=>({...s,body:s.body.replace('研究背景第一段','已审核研究背景第一段')}));
+ await svc.update('proposal',item.id,{...item.doc,sections},item.revision);
+ const edited=await svc.exportFile('proposal',item.id,'docx');
+ assert.equal(edited.fidelity,'text-patched');
+ assert(parseImportedDocx(edited.bytes).sections.some(s=>s.body.includes('已审核研究背景第一段')));
+ const src=await readFile(join(svc.root,'content','proposal',item.id,'source.docx'));
+ assert.deepEqual(src,docx,'Original never overwritten');
+ const after=await svc.one('proposal',item.id);
+ const reordered={...after.doc,sections:[...after.doc.sections].reverse()};
+ await svc.update('proposal',item.id,reordered,after.revision);
+ const simplified=await svc.exportFile('proposal',item.id,'docx');
+ assert.equal(simplified.fidelity,'simplified');
+});
+test('PPTX preserves slide geometry for editable text',async t=>{
+ const svc=await service(t),raw=await fixture('sample.pptx');
+ const item=await svc.importOffice('slides','报告',raw,'paper','sample.pptx');
+ assert.equal(item.sourceFormat,'pptx');
+ assert.equal(item.doc.slides.length,2);
+ assert.deepEqual((await svc.exportFile('slides',item.id,'pptx')).bytes,raw);
+ const changed={...item.doc,slides:item.doc.slides.map((s,i)=>i===0?{...s,title:'已修改的研究背景'}:s)};
+ await svc.update('slides',item.id,changed,item.revision);
+ const output=await svc.exportFile('slides',item.id,'pptx');
+ assert.equal(output.fidelity,'text-patched');
+ assert.equal(parseImportedPptx(output.bytes).slides[0].title,'已修改的研究背景');
+});
+test('HTTP office binary upload/download require DSH authentication',async t=>{
+ const svc=await service(t);
+ const server=createServer((req,res)=>svc.handle(req,res));
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const url='http://127.0.0.1:'+server.address().port;
+ const path='/research-workbench/content/proposal/import-office?title=APItest&templateId=generic&filename=sample.docx';
+ const raw=await fixture('sample.docx');
+ const headers={'cookie':'dsh-test-session=valid','content-type':'application/octet-stream'};
+ const bad=await fetch(url+path,{method:'POST',headers:{'content-type':'application/octet-stream'},body:raw});
+ assert.equal(bad.status,403);
+ const good=await fetch(url+path,{method:'POST',headers,body:raw});
+ assert.equal(good.status,201);
+ const {item}=await good.json();
+ const original=await fetch(url+'/research-workbench/content/proposal/'+item.id+'/source',{headers:{cookie:'dsh-test-session=valid'}});
+ assert.equal(original.status,200);
+ assert.deepEqual(Buffer.from(await original.arrayBuffer()),raw);
+ const exported=await fetch(url+'/research-workbench/content/proposal/'+item.id+'/export?format=docx',{headers:{cookie:'dsh-test-session=valid'}});
+ assert.equal(exported.headers.get('x-dsh-office-fidelity'),'original');
+ assert.equal((await fetch(url+path.replace('sample.docx','sample.pptx'),{method:'POST',headers,body:raw})).status,400);
+ assert.equal((await fetch(url+path,{method:'POST',headers,body:Buffer.from('invalid zip')})).status,422);
+});

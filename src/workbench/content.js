@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { authorized } from '../papers.js';
 import { makeDocx, makePptx, makeMarkdown } from './office.js';
+import { parseImportedDocx, parseImportedPptx, patchImportedOffice, OfficeImportError, OFFICE_IMPORT_MAX_BYTES } from './office-import.js';
 
 export const CONTENT_API='/research-workbench/content';
 const UUID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
@@ -70,6 +71,14 @@ async function readBody(req,max=800000){
  let obj;try{obj=JSON.parse(Buffer.concat(chunks).toString('utf8'))}catch{fail(400,'BAD_JSON','无效 JSON')}
  if(!obj||typeof obj!=='object'||Array.isArray(obj))fail(400,'BAD_JSON','请求必须为对象');return obj;
 }
+async function readOfficeBody(req,max=OFFICE_IMPORT_MAX_BYTES){
+ const hint=Number(req.headers['content-length']);
+ if(Number.isFinite(hint)&&hint>max)fail(413,'OFFICE_TOO_LARGE','Office 文件不能超过 12 MiB');
+ let length=0;const parts=[];
+ for await(const chunk of req){length+=chunk.length;if(length>max)fail(413,'OFFICE_TOO_LARGE','Office 文件不能超过 12 MiB');parts.push(chunk)}
+ if(!length)fail(400,'EMPTY_OFFICE','Office 文件为空');
+ return Buffer.concat(parts);
+}
 function send(res,status,data){const b=Buffer.from(JSON.stringify(data));res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-length':b.length});res.end(b)}
 function fname(title,ext){const clean=title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,72)||'export';return encodeURIComponent(`${clean}.${ext}`)}
 
@@ -94,7 +103,7 @@ export function createContentService(options={}){
   const out=[];
   for(const f of await fs.readdir(path.join(contentDir,kind),{withFileTypes:true})){
    if(!f.isDirectory()||!UUID.test(f.name))continue;
-   try{const d=await one(kind,f.name);out.push({id:d.id,kind,title:d.doc.title,subtype:d.doc.subtype,updatedAt:d.updatedAt,createdAt:d.createdAt,revision:d.revision,count:(d.doc.slides||d.doc.sections).length})}catch{/* ignore malformed local directory */}
+   try{const d=await one(kind,f.name);out.push({id:d.id,kind,title:d.doc.title,subtype:d.doc.subtype,updatedAt:d.updatedAt,createdAt:d.createdAt,revision:d.revision,count:(d.doc.slides||d.doc.sections).length,sourceFormat:d.sourceFormat||null})}catch{/* ignore malformed local directory */}
   }
   return out.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
  }
@@ -121,12 +130,33 @@ export function createContentService(options={}){
   await fs.mkdir(path.dirname(dest),{recursive:true});await fs.rename(from,dest);return {id,archived:true};
  })}
  async function exportFile(kind,id,format){
-  const item=await one(kind,id);let bytes,ext,mime;
+  const item=await one(kind,id);let bytes,ext,mime,fidelity='generated';
   if(format==='md'){bytes=Buffer.from(makeMarkdown(item.doc),'utf8');ext='md';mime='text/markdown; charset=utf-8'}
-  else if(kind==='slides'&&format==='pptx'){bytes=makePptx(item.doc);ext='pptx';mime='application/vnd.openxmlformats-officedocument.presentationml.presentation'}
-  else if(kind!=='slides'&&format==='docx'){bytes=makeDocx(item.doc);ext='docx';mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document'}
+  else if(kind==='slides'&&format==='pptx'){
+   ext='pptx';mime='application/vnd.openxmlformats-officedocument.presentationml.presentation';
+   ({bytes,fidelity}=await exportOfficeOrGenerated(item,'pptx'));
+  }
+  else if(kind!=='slides'&&format==='docx'){
+   ext='docx';mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+   ({bytes,fidelity}=await exportOfficeOrGenerated(item,'docx'));
+  }
   else fail(400,'BAD_FORMAT','不支持的导出格式');
-  return {bytes,mime,filename:fname(item.doc.title,ext)};
+  return {bytes,mime,fidelity,filename:fname(item.doc.title,ext)};
+ }
+ async function exportOfficeOrGenerated(item,format){
+  const generate=()=>format==='pptx'?makePptx(item.doc):makeDocx(item.doc);
+  if(item.sourceFormat!==format)return {bytes:generate(),fidelity:'generated'};
+  const dir=folder(item.kind,item.id);
+  const [original,descriptor]=await Promise.all([
+   fs.readFile(path.join(dir,'source.'+format)),
+   fs.readFile(path.join(dir,'source-manifest.json'),'utf8'),
+  ]);
+  const manifest=JSON.parse(descriptor);
+  if(manifest.format!==format)fail(500,'BAD_SOURCE','原始 Office 文件元数据损坏');
+  if(JSON.stringify(manifest.originalDoc)===JSON.stringify(item.doc))return {bytes:original,fidelity:'original'};
+  const patched=patchImportedOffice(format,original,manifest.map,manifest.originalDoc,item.doc);
+  if(patched)return {bytes:patched,fidelity:'text-patched'};
+  return {bytes:generate(),fidelity:'simplified'};
  }
  async function importMarkdown(kind,title,markdown,templateId){
   safeKind(kind);
@@ -147,6 +177,26 @@ export function createContentService(options={}){
   const doc=kind==='slides'?{...base.doc,slides:[{id:randomUUID(),title:name,body:'由本地 Markdown 导入',layout:'cover',footer:''},...sections.map(c=>({id:randomUUID(),title:c.heading,body:c.body,layout:'bullets',footer:''}))]}:{...base.doc,sections:sections.map(c=>({id:randomUUID(),heading:c.heading,body:c.body}))};
   return await update(kind,base.id,doc,base.revision);
  }
+ async function importOffice(kind,title,bytes,templateId,filename){
+  safeKind(kind);
+  const format=kind==='slides'?'pptx':'docx';
+  if(typeof filename!=='string'||!filename.toLowerCase().endsWith('.'+format))
+   fail(400,'BAD_OFFICE_FORMAT','该工作台仅接受 .'+format+' 文件；旧版 .doc/.ppt 请先在 Office 中另存为新格式');
+  const parsed=format==='pptx'?parseImportedPptx(bytes):parseImportedDocx(bytes);
+  const name=cleanTitle(title);
+  const base=await create(kind,name,templateId);
+  try{
+   const doc=format==='pptx'?{...base.doc,slides:parsed.slides.map(s=>({id:randomUUID(),...s}))}:
+    {...base.doc,sections:parsed.sections.map(s=>({id:randomUUID(),...s}))};
+   const item=await update(kind,base.id,doc,base.revision);
+   const dir=folder(kind,base.id);
+   await writeAtomic(path.join(dir,'source.'+format),bytes);
+   await writeAtomic(path.join(dir,'source-manifest.json'),JSON.stringify({format,map:parsed.map,originalDoc:item.doc}));
+   const result={...item,sourceFormat:format,sourceWarnings:parsed.warnings};
+   await writeAtomic(path.join(dir,'artifact.json'),JSON.stringify(result,null,2)+'\n');
+   return result;
+  }catch(e){await fs.rm(folder(kind,base.id),{recursive:true,force:true});throw e}
+ }
  async function fromProposal(id){
   const source=await one('proposal',id);
   const out=await create('slides',source.doc.title+' · 汇报版','blank');
@@ -163,7 +213,12 @@ export function createContentService(options={}){
    if(url.pathname===CONTENT_API+'/templates'&&req.method==='GET')return send(res,200,{ok:true,templates:templateCatalog()});
    const importing=url.pathname.match(/^\/research-workbench\/content\/(proposal|slides|ip)\/import$/i);
    if(importing&&req.method==='POST'){const body=await readBody(req);return send(res,201,{ok:true,item:await importMarkdown(importing[1],body.title,body.markdown,body.templateId)});}
-   const match=url.pathname.match(/^\/research-workbench\/content\/(proposal|slides|ip)(?:\/([a-f0-9-]{36})(?:\/(export|archive|to-slides))?)?$/i);
+   const importingOffice=url.pathname.match(/^\/research-workbench\/content\/(proposal|slides|ip)\/import-office$/i);
+   if(importingOffice&&req.method==='POST'){
+    const bytes=await readOfficeBody(req);
+    return send(res,201,{ok:true,item:await importOffice(importingOffice[1],url.searchParams.get('title'),bytes,url.searchParams.get('templateId'),url.searchParams.get('filename'))});
+   }
+   const match=url.pathname.match(/^\/research-workbench\/content\/(proposal|slides|ip)(?:\/([a-f0-9-]{36})(?:\/(export|archive|to-slides|source))?)?$/i);
    if(!match)return send(res,404,{ok:false,code:'NOT_FOUND',error:'路径不存在'});
    const [,kind,id,action]=match;
    if(!id){
@@ -174,12 +229,23 @@ export function createContentService(options={}){
     if(req.method==='PUT'){const body=await readBody(req);return send(res,200,{ok:true,item:await update(kind,id,body.doc,body.expectedRevision)})}
    }else if(action==='archive'&&req.method==='POST')return send(res,200,{ok:true,...await archive(kind,id)});
    else if(action==='to-slides'&&kind==='proposal'&&req.method==='POST')return send(res,201,{ok:true,item:await fromProposal(id)});
+   else if(action==='source'&&req.method==='GET'){
+    const item=await one(kind,id);
+    if(!item.sourceFormat)fail(404,'NOT_FOUND','该成果没有导入的 Office 原文件');
+    const bytes=await fs.readFile(path.join(folder(kind,id),'source.'+item.sourceFormat));
+    const type=item.sourceFormat==='pptx'?'application/vnd.openxmlformats-officedocument.presentationml.presentation':'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    res.writeHead(200,{'content-type':type,'content-disposition':`attachment; filename*=UTF-8''${fname(item.doc.title+'-原件',item.sourceFormat)}`,'content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff'});
+    return res.end(bytes);
+   }
    else if(action==='export'&&req.method==='GET'){
-    const {bytes,mime,filename}=await exportFile(kind,id,url.searchParams.get('format'));
-    res.writeHead(200,{'content-type':mime,'content-disposition':`attachment; filename*=UTF-8''${filename}`,'content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff'});return res.end(bytes);
+    const {bytes,mime,filename,fidelity}=await exportFile(kind,id,url.searchParams.get('format'));
+    res.writeHead(200,{'content-type':mime,'content-disposition':`attachment; filename*=UTF-8''${filename}`,'content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff','x-dsh-office-fidelity':fidelity});return res.end(bytes);
    }
    return send(res,405,{ok:false,code:'METHOD_NOT_ALLOWED',error:'请求方法不允许'});
-  }catch(e){return send(res,e instanceof ContentError?e.status:500,{ok:false,code:e instanceof ContentError?e.code:'INTERNAL_ERROR',error:e instanceof ContentError?e.message:'内容服务内部错误'})}
+  }catch(e){
+   if(e instanceof OfficeImportError)return send(res,422,{ok:false,code:e.code,error:e.message});
+   return send(res,e instanceof ContentError?e.status:500,{ok:false,code:e instanceof ContentError?e.code:'INTERNAL_ERROR',error:e instanceof ContentError?e.message:'内容服务内部错误'});
+  }
  }
- return {root,handle,list,one,create,update,archive,exportFile,templateCatalog,fromProposal,importMarkdown};
+ return {root,handle,list,one,create,update,archive,exportFile,templateCatalog,fromProposal,importMarkdown,importOffice};
 }

@@ -1,5 +1,5 @@
 /*
- * DSH Research Workbench v0.3.1 — native sidebar + keyed-main-panel MVP.
+ * DSH Research Workbench v0.3.3 — native sidebar + keyed-main-panel MVP.
  * This file is a prebuilt browser module: the exact DSH __ModuleLoader__ ABI
  * used by current client bundles. No DOM scraping or React duplication.
  */
@@ -16,6 +16,7 @@
         { id:'research-slides', kind:'slides', order:30, title:'PPT 工作台', icon:'presentation', subtitle:'科研组会、项目汇报和答辩演示文稿' },
         { id:'research-papers', kind:'paper', order:40, title:'论文管理', icon:'book', subtitle:'本地 LaTeX 项目编辑与 Tectonic 编译' },
         { id:'research-ip', kind:'ip', order:50, title:'专利与软著', icon:'shield', subtitle:'专利技术交底和软件著作权申请材料' },
+        { id:'research-ccf', kind:'deadlines', order:60, title:'CCF 截稿', icon:'calendar', subtitle:'CCF A/B/C 会议投稿时间、分类与收藏' },
       ]);
 
       const SHAPES = Object.freeze({
@@ -30,6 +31,7 @@
           'M8 21l4-4 4 4',
           'M12 17v4',
         ],
+        calendar: ['M8 2v4','M16 2v4','M3 10h18','M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z','M8 14h3','M8 18h3'],
         flask: [
           'M9 3h6',
           'M10 3v7l-5.6 9a2 2 0 0 0 1.7 3h11.8a2 2 0 0 0 1.7-3L14 10V3',
@@ -218,16 +220,29 @@
         };
         const importFile = async (file) => {
           if (!file || busy) return;
-          if (!/\.(md|txt)$/i.test(file.name) || file.size > 300000) { setError('请导入不超过 300 KB 的 .md 或 .txt 文件'); return; }
+          const office= /\.(docx|pptx)$/i.test(file.name);
+          const correctOffice= kind==='slides' ? /\.pptx$/i.test(file.name) : /\.docx$/i.test(file.name);
+          if ((office && (!correctOffice || file.size>12*1024*1024)) ||
+              (!office && (!/\.(md|txt)$/i.test(file.name) || file.size>300000))) {
+            setError(kind==='slides'?'支持 PPTX (最大12 MiB) 或 MD/TXT (最大300 KB)':'支持 DOCX (最大12 MiB) 或 MD/TXT (最大300 KB)');return;
+          }
           if (selectedRef.current && !await flush()) return;
           setBusy(true); setError('');
           try {
-            const markdown = await file.text();
-            const title = newTitle.trim() || file.name.replace(/\.(md|txt)$/i, '');
-            const {item} = await artifactRequest(`/${kind}/import`, {
-              method:'POST', body:sendBody({title,templateId:template,markdown}),
-            });
-            setNewTitle(''); await refreshItems(); await loadOne(item.id,true);
+            const title = newTitle.trim() || file.name.replace(/\.(docx|pptx|md|txt)$/i, '');
+            let item;
+            if(office){
+              const query=new URLSearchParams({title,templateId:template,filename:file.name});
+              ({item}=await artifactRequest(`/${kind}/import-office?`+query.toString(),{
+                method:'POST',body:await file.arrayBuffer(),headers:{'content-type':'application/octet-stream'},
+              }));
+            }else{
+              ({item}=await artifactRequest(`/${kind}/import`,{
+                method:'POST',body:sendBody({title,templateId:template,markdown:await file.text()}),
+              }));
+            }
+            setNewTitle('');await refreshItems();await loadOne(item.id,true);
+            if(item.sourceWarnings?.length)setNotice('Office 原文件已保留，可以下载原件；编辑超出原有结构时导出将简化排版。');
           } catch(e) { setError(e.message); }
           finally { setBusy(false); }
         };
@@ -294,7 +309,7 @@
               h('select',{'aria-label':'选择模板',value:template,onChange:e=>setTemplate(e.target.value)},templates.map(t=>h('option',{key:t.id,value:t.id},t.label))),
               h('input',{'aria-label':'新建成果名称',placeholder:kind==='slides'?'演示文稿名称':kind==='proposal'?'项目书名称':'专利或软著材料名称',value:newTitle,onChange:e=>setNewTitle(e.target.value),onKeyDown:e=>e.key==='Enter'&&void create()}),
               h('button',{type:'button',className:'drw-artifact-primary',disabled:busy||!newTitle.trim()||!template,onClick:()=>void create()},'＋ 新建'+productLabels[kind]),
-              h('label',{className:'drw-artifact-import'},'导入 Markdown / TXT',h('input',{type:'file',accept:'.md,.txt,text/plain,text/markdown','aria-label':'导入 Markdown 或 TXT 文本',disabled:busy,onChange:e=>{const file=e.target.files?.[0];e.target.value='';if(file)void importFile(file);}}))
+              h('label',{className:'drw-artifact-import'},kind==='slides'?'导入 PPTX / MD / TXT':'导入 Word DOCX / MD / TXT',h('input',{type:'file',accept:kind==='slides'?'.pptx,.md,.txt':'.docx,.md,.txt','aria-label':kind==='slides'?'导入 PowerPoint PPTX 或文本':'导入 Word DOCX 或文本',disabled:busy,onChange:e=>{const file=e.target.files?.[0];e.target.value='';if(file)void importFile(file);}}))
             ),
             h('div',{className:'drw-artifact-projects'},
               loading?h('p',{className:'drw-artifact-muted'},'正在加载…'):
@@ -321,12 +336,18 @@
                 ),
                 h('div',{className:'drw-artifact-actions'},
                   h('button',{type:'button',disabled:saving||busy,onClick:()=>void flush()},'保存'),
+                  current.sourceFormat?h('a',{href:ARTIFACT_API+artifactUrl(kind,current.id)+'/source',download:true},'原件下载'):null,
                   h('a',{href:exportUrl(kind,current.id,'md'),download:true,onClick:e=>{if(JSON.stringify(draft)!==savedRef.current){e.preventDefault();void flush().then(ok=>{if(ok)window.location.assign(exportUrl(kind,current.id,'md'));});}}},'Markdown'),
                   h('a',{href:exportUrl(kind,current.id,kind==='slides'?'pptx':'docx'),download:true,className:'drw-artifact-primary',onClick:e=>{if(JSON.stringify(draft)!==savedRef.current){e.preventDefault();void flush().then(ok=>{if(ok)window.location.assign(exportUrl(kind,current.id,kind==='slides'?'pptx':'docx'));});}}},'导出 '+(kind==='slides'?'PPTX':'Word')),
                   kind==='proposal'?h('button',{type:'button',disabled:busy,onClick:()=>void buildSlides()},'转换成PPT'):null,
                   h('button',{type:'button',className:'drw-artifact-danger',disabled:busy,onClick:()=>void archive()},'归档')
                 )
               ),
+              current.sourceFormat?h('div',{className:'drw-office-import-note',role:'note'},
+                '已导入 '+current.sourceFormat.toUpperCase()+' 原文件，可随时下载原件。',
+                kind==='slides'?'可修改文本框文字；新增/删除页面、调整版式或复杂排版后，导出可能使用简化页面布局。':'可修改标题和段落文字；增加/删除章节或改变原有段落数量后，导出可能使用简化排版。',
+                ' 修改后建议用 Word / PowerPoint 核对最终文件。'
+              ):null,
               h('div',{className:'drw-artifact-meta'},
                 h('label',null,'单位',h('input',{value:draft.organization||'',onChange:e=>updating('organization',e.target.value),placeholder:'申报单位 / 所属机构'})),
                 h('label',null,'作者或负责人',h('input',{value:draft.author||'',onChange:e=>updating('author',e.target.value),placeholder:'可选'})),
@@ -741,7 +762,142 @@
         );
       }
 
+      /** Native DSH panel for CCF submission deadlines. The source only has dates, not clock times. */
+      function DeadlinePage(props) {
+        const [payload,setPayload] = React.useState(null);
+        const [loading,setLoading] = React.useState(true);
+        const [error,setError] = React.useState('');
+        const [level,setLevel] = React.useState('all');
+        const [area,setArea] = React.useState('focus');
+        const [windowDays,setWindowDays] = React.useState('90');
+        const [query,setQuery] = React.useState('');
+        const [onlyFav,setOnlyFav] = React.useState(false);
+        const [favorites,setFavorites] = React.useState(() => {
+          try { const x = JSON.parse(window.localStorage?.getItem('dsh-rwb-ccf-favorites') || '[]');
+            return Array.isArray(x) ? x.filter(v=>typeof v==='string').slice(0,1000) : [];
+          } catch { return []; }
+        });
+        async function load(force=false) {
+          setLoading(true);setError('');
+          try {
+            const response=await fetch('/research-workbench/deadlines'+(force?'?refresh=1':''),{credentials:'same-origin'});
+            const result=await response.json();
+            if(!response.ok||!result.ok)throw Error(result.error||'无法获取会议数据');
+            setPayload(result);
+          } catch(e){ setError(e.message||String(e)); }
+          finally{ setLoading(false); }
+        }
+        React.useEffect(()=>{let canceled=false;
+          const request=fetch('/research-workbench/deadlines',{credentials:'same-origin'}).then(async res=>{
+            const data=await res.json();if(!res.ok||!data.ok)throw Error(data.error||'获取失败');
+            if(!canceled){setPayload(data);setError('');}
+          }).catch(e=>{if(!canceled)setError(e.message||String(e));}).finally(()=>{if(!canceled)setLoading(false)});
+          return ()=>{canceled=true;void request;};
+        },[]);
+        const current=new Date();
+        const today=Date.UTC(current.getFullYear(),current.getMonth(),current.getDate());
+        const distance=(date)=>{
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(date||''))return null;
+          const [year,month,day]=date.split('-').map(Number);
+          return Math.round((Date.UTC(year,month-1,day)-today)/86400000);
+        };
+        const focusRe=/\b(?:AI|NLP|CV|ML|VISION|SECURITY|MULTIMEDIA|COMPUTER\s*VISION)\b/i;
+        const knownFocus=/^(AAAI|ACL|EMNLP|NAACL|ICLR|ICML|NEURIPS|NIPS|IJCAI|CVPR|ICCV|ECCV|ACM MM|CCS|NDSS|USENIX SECURITY|IEEE S&P|ICSE|ASE|ICPR|WACV)$/i;
+        const all=payload?.conferences||[];
+        const featured=all.filter(x=>{
+          const fields=(x.areas||[]).join(' ');
+          return focusRe.test(fields)||knownFocus.test(x.name);
+        });
+        const favoritesSet=new Set(favorites);
+        const filtered=all.filter(x=>{
+          const days=distance(x.deadline);
+          if(level!=='all'&&x.rank!==level)return false;
+          if(onlyFav&&!favoritesSet.has(x.name))return false;
+          if(area==='focus'&&!featured.includes(x))return false;
+          if(!['all','focus'].includes(area)&&!(x.areas||[]).some(v=>v.toLowerCase().includes(area)))return false;
+          if(windowDays!=='any'&&(days===null||days<0||days>Number(windowDays)))return false;
+          if(windowDays==='any' && days!==null && days<0 && !onlyFav)return false;
+          const term=query.trim().toLowerCase();
+          if(term && !(x.name+' '+x.title+' '+(x.areas||[]).join(' ')).toLowerCase().includes(term))return false;
+          return true;
+        }).sort((a,b)=>{
+          const da=distance(a.deadline),db=distance(b.deadline);
+          return (da===null?1e9:da)-(db===null?1e9:db)||a.name.localeCompare(b.name);
+        });
+        const toggleFavorite=(name)=>{
+          const next=favoritesSet.has(name)?favorites.filter(x=>x!==name):[...favorites,name];
+          setFavorites(next);
+          try{window.localStorage?.setItem('dsh-rwb-ccf-favorites',JSON.stringify(next));}catch{/* private window */}
+        };
+        const labelDays=(days)=>days===null?'待公布':days===0?'今天截止':days>0?'还有 '+days+' 天':'已过期';
+        const sourceTime=payload?.generatedAt ? new Date(payload.generatedAt) : null;
+        const dataTime=sourceTime&&!Number.isNaN(sourceTime.getTime())?sourceTime.toLocaleString('zh-CN',{hour12:false}):'未知';
+        return h('section',{className:'drw-ccf-page',role:'region','aria-label':'CCF 投稿截止日历'},
+          h('header',{className:'drw-ccf-header'},
+            h('div',null,h('div',{className:'drw-ccf-eyebrow'},'RESEARCH · CONFERENCE DEADLINES'),
+              h('h1',null,'CCF 投稿截止日历'),
+              h('p',null,'按等级、研究方向和截稿日期筛选会议；收藏你正在准备投稿的会议。')),
+            h('div',{className:'drw-ccf-actions'},
+              h('button',{type:'button',disabled:loading,onClick:()=>void load(true)},loading?'更新中…':'更新日期'),
+              h('button',{type:'button',onClick:()=>props.onReturnChat()},'返回聊天'))
+          ),
+          h('div',{className:'drw-ccf-stats'},
+            h('div',null,h('strong',null,all.length),h('span',null,'已收录 CCF 会议')),
+            h('div',null,h('strong',null,all.filter(x=>{const n=distance(x.deadline);return n!==null&&n>=0&&n<=30}).length),h('span',null,'未来 30 天截稿')),
+            h('div',null,h('strong',null,all.filter(x=>{const n=distance(x.deadline);return n!==null&&n>=0&&n<=90}).length),h('span',null,'未来 90 天截稿')),
+            h('div',null,h('strong',null,favorites.length),h('span',null,'收藏的会议'))
+          ),
+          h('div',{className:'drw-ccf-filter'},
+            h('label',null,'会议搜索',h('input',{type:'search',value:query,onChange:e=>setQuery(e.target.value),placeholder:'例如 CVPR / ICLR / ACL'})),
+            h('label',null,'CCF 分级',h('select',{value:level,onChange:e=>setLevel(e.target.value)},
+              h('option',{value:'all'},'全部级别'),h('option',{value:'A'},'CCF A'),h('option',{value:'B'},'CCF B'),h('option',{value:'C'},'CCF C'))),
+            h('label',null,'研究方向',h('select',{value:area,onChange:e=>setArea(e.target.value)},
+              h('option',{value:'focus'},'AI / 视觉 / NLP / 安全'),h('option',{value:'all'},'全部方向'),
+              h('option',{value:'ai'},'人工智能'),h('option',{value:'nlp'},'自然语言处理'),
+              h('option',{value:'cv'},'计算机视觉'),h('option',{value:'security'},'安全'),
+              h('option',{value:'se'},'软件工程'),h('option',{value:'database'},'数据库'))),
+            h('label',null,'截稿范围',h('select',{value:windowDays,onChange:e=>setWindowDays(e.target.value)},
+              h('option',{value:'30'},'未来 30 天'),h('option',{value:'90'},'未来 90 天'),
+              h('option',{value:'365'},'未来一年'),h('option',{value:'any'},'所有未来及待公布'))),
+            h('label',{className:'drw-ccf-favorite-toggle'},h('input',{type:'checkbox',checked:onlyFav,onChange:e=>setOnlyFav(e.target.checked)}),'仅看收藏')
+          ),
+          h('div',{className:'drw-ccf-databar'},
+            h('span',null,loading?'正在读取会议数据':`筛选结果 ${filtered.length} 条 · 数据更新于 ${dataTime}`),
+            h('a',{href:'https://ccfddl.com/',target:'_blank',rel:'noopener noreferrer'},'查看含时区的社区截稿目录')),
+          payload?.stale?h('div',{className:'drw-ccf-warning',role:'status'},'当前使用离线缓存，在线更新未成功。请核对会议官网。'):null,
+          error?h('div',{className:'drw-ccf-warning',role:'alert'},error):null,
+          h('div',{className:'drw-ccf-list'},
+            !loading&&!filtered.length?h('div',{className:'drw-ccf-empty'},
+              all.length?'当前筛选没有匹配的未来截稿记录，可以扩大日期范围。':'暂时没有会议数据，请点击“更新日期”或检查网络。'):null,
+            filtered.map(x=>{
+              const days=distance(x.deadline),isFavorite=favoritesSet.has(x.name);
+              return h('article',{className:'drw-ccf-row',key:x.name},
+                h('button',{className:'drw-ccf-star'+(isFavorite?' active':''),type:'button',
+                  'aria-label':(isFavorite?'取消收藏 ':'收藏 ')+x.name,'aria-pressed':isFavorite,onClick:()=>toggleFavorite(x.name)},isFavorite?'★':'☆'),
+                h('div',{className:'drw-ccf-main'},
+                  h('div',{className:'drw-ccf-name'},h('strong',null,x.name),h('span',{className:'drw-ccf-rank'},'CCF '+x.rank)),
+                  h('p',null,x.title||'会议名称未提供'),
+                  h('span',{className:'drw-ccf-subline'},x.location||'地点待公布')),
+                h('div',{className:'drw-ccf-deadline'},
+                  h('strong',null,x.deadline||'暂未公布'),
+                  h('span',null,labelDays(days)),
+                  h('small',null,'具体时间/时区请以官网为准')),
+                h('div',{className:'drw-ccf-links'},
+                  x.page?h('a',{href:x.page,target:'_blank',rel:'noopener noreferrer'},'会议详情 ↗'):h('span',null,'来源链接暂缺'))
+              );
+            })
+          ),
+          h('footer',{className:'drw-ccf-footnote'},
+            '日期与 CCF 分级来自 Conference Partner (myhuiban.com) 公开汇总；不是会议主办方的最终通知。',
+            '数据仅给出日期，没有精确时刻或 AoE/时区信息，正式投稿前务必点开详情并核对官方 CFP。',
+            '过期截稿默认隐藏，未公布的日期不会推算。')
+        );
+      }
+
       const CSS = `
+        /* The built-in redundant More launcher is visually replaced by our CCF panel row. */
+        nav[class*="panelList"] button[aria-haspopup="menu"][aria-label="更多"],
+        nav[class*="panelList"] button[aria-haspopup="menu"][aria-label="More"]{display:none!important;}
         /* Artifact studios: native DSH layout, no extra overlay or navigation shell. */
         .drw-artifact-workspace{display:grid;grid-template-columns:256px minmax(0,1fr);width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#161a22);font-size:13px;}
         .drw-artifact-workspace *{box-sizing:border-box;}
@@ -754,6 +910,7 @@
         .drw-artifact-workspace button{font-family:inherit;color:inherit;cursor:pointer;}
         .drw-artifact-workspace button:disabled{opacity:.5;cursor:not-allowed;}
         .drw-artifact-primary{display:inline-flex;align-items:center;justify-content:center;padding:9px 12px;border:1px solid #1e2736;border-radius:7px;background:#1e2736!important;color:#fff!important;text-decoration:none;font-size:12px;font-weight:600;}
+        .drw-office-import-note{padding:11px 20px;border-bottom:1px solid var(--dsw-alias-border-l3,#dbe2ea);background:var(--dsw-alias-bg-base,#fff);font-size:12px;line-height:1.7;color:var(--dsw-alias-label-secondary,#64748b);}
         .drw-artifact-import{display:block;text-align:center;padding:9px;border:1px dashed var(--dsw-alias-border-l3,#ced4da);border-radius:7px;cursor:pointer;color:var(--dsw-alias-label-secondary,#607080);font-size:11px;}
         .drw-artifact-import input{display:none;}
         .drw-artifact-projects{overflow:auto;flex:1;padding:12px 9px;min-height:0;}
@@ -906,6 +1063,58 @@
         .drw-return:focus-visible,.drw-nav-card:focus-visible {outline:2px solid var(--dsw-focus-ring-color,#4c75cb); outline-offset:2px;}
         .drw-footer-note {font-size:12px; color:var(--dsw-alias-label-tertiary,#8a8a8a); margin:25px 0 0;}
         @media (max-width:740px) { .drw-content{padding:22px 20px 40px;} .drw-feature-grid{grid-template-columns:1fr;} .drw-nav-grid{grid-template-columns:1fr;} .drw-header{margin-bottom:24px;} }
+        /* CCF deadline calendar: same native surface language as the artifact studios. */
+        .drw-ccf-page{display:flex;flex-direction:column;min-height:0;height:100%;width:100%;overflow:auto;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#161a22);font-size:13px;}
+        .drw-ccf-page *{box-sizing:border-box;}
+        .drw-ccf-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;padding:26px 26px 18px;}
+        .drw-ccf-eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#8a93a0);margin-bottom:7px;}
+        .drw-ccf-header h1{margin:0;font-size:22px;font-weight:600;line-height:1.3;}
+        .drw-ccf-header p{margin:8px 0 0;font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-secondary,#68768a);max-width:620px;}
+        .drw-ccf-actions{display:flex;gap:8px;flex-wrap:wrap;}
+        .drw-ccf-actions button{font:inherit;font-size:12px;padding:8px 13px;min-height:33px;border-radius:7px;border:1px solid var(--dsw-alias-border-l3,#d7dce4);background:var(--dsw-alias-bg-base,#fff);color:inherit;cursor:pointer;}
+        .drw-ccf-actions button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#f1f3f5);}
+        .drw-ccf-actions button:disabled{opacity:.55;cursor:progress;}
+        .drw-ccf-actions button:first-child{border-color:#1e2736;background:#1e2736;color:#fff;font-weight:600;}
+        .drw-ccf-actions button:first-child:hover:not(:disabled){background:#2b3648;}
+        .drw-ccf-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:0 26px 18px;}
+        .drw-ccf-stats>div{display:flex;flex-direction:column;gap:3px;padding:13px 15px;border:1px solid var(--dsw-alias-border-l3,#e1e5ea);border-radius:10px;background:var(--dsw-alias-bg-layer-1,#f8f9fb);}
+        .drw-ccf-stats strong{font-size:20px;font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums;}
+        .drw-ccf-stats span{font-size:11px;color:var(--dsw-alias-label-secondary,#68768a);}
+        .drw-ccf-filter{display:grid;grid-template-columns:minmax(180px,1.6fr) repeat(3,minmax(130px,1fr)) auto;gap:10px;align-items:end;padding:0 26px 16px;}
+        .drw-ccf-filter label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--dsw-alias-label-secondary,#68768a);min-width:0;}
+        .drw-ccf-filter input,.drw-ccf-filter select{width:100%;min-width:0;padding:8px 10px;font:inherit;font-size:12.5px;background:var(--dsw-alias-bg-base,#fff);color:inherit;border:1px solid var(--dsw-alias-border-l3,#d7dce4);border-radius:7px;}
+        .drw-ccf-filter input:focus-visible,.drw-ccf-filter select:focus-visible{outline:2px solid var(--dsw-focus-ring-color,#4c75cb);outline-offset:1px;}
+        .drw-ccf-filter .drw-ccf-favorite-toggle{flex-direction:row;align-items:center;gap:7px;padding-bottom:9px;font-size:12px;color:var(--dsw-alias-label-primary,inherit);white-space:nowrap;}
+        .drw-ccf-favorite-toggle input{width:15px;height:15px;padding:0;accent-color:#1e2736;}
+        .drw-ccf-databar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 26px;border-top:1px solid var(--dsw-alias-border-l3,#e6eaee);border-bottom:1px solid var(--dsw-alias-border-l3,#e6eaee);font-size:11.5px;color:var(--dsw-alias-label-secondary,#68768a);background:var(--dsw-alias-bg-layer-1,#fafbfc);}
+        .drw-ccf-databar a{color:var(--dsw-alias-label-link,#2f6fd0);text-decoration:none;}
+        .drw-ccf-databar a:hover{text-decoration:underline;}
+        .drw-ccf-warning{margin:14px 26px 0;padding:11px 14px;border:1px solid #e8cf9a;border-radius:8px;background:#fdf6e7;color:#7a5a12;font-size:12px;line-height:1.65;}
+        .drw-ccf-list{display:flex;flex-direction:column;gap:8px;padding:16px 26px 8px;}
+        .drw-ccf-row{display:grid;grid-template-columns:34px minmax(0,1fr) 148px 108px;gap:14px;align-items:center;padding:13px 15px;border:1px solid var(--dsw-alias-border-l3,#e5e9ee);border-radius:10px;background:var(--dsw-alias-bg-base,#fff);}
+        .drw-ccf-row:hover{border-color:var(--dsw-alias-border-l2,#cfd8e2);background:var(--dsw-alias-bg-layer-1,#fbfcfd);}
+        .drw-ccf-star{width:30px;height:30px;display:grid;place-items:center;padding:0;font-size:15px;line-height:1;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--dsw-alias-label-tertiary,#b3bcc7);cursor:pointer;}
+        .drw-ccf-star:hover{background:var(--dsw-alias-interactive-bg-hover,#eef1f5);color:#c08a1e;}
+        .drw-ccf-star.active{color:#d99a12;}
+        .drw-ccf-main{min-width:0;display:flex;flex-direction:column;gap:4px;}
+        .drw-ccf-name{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .drw-ccf-name strong{font-size:14px;font-weight:600;letter-spacing:.01em;}
+        .drw-ccf-rank{font-size:10px;font-weight:600;letter-spacing:.04em;padding:2px 7px;border-radius:20px;border:1px solid var(--dsw-alias-border-l3,#dde2e8);color:var(--dsw-alias-label-secondary,#5d6a7a);background:var(--dsw-alias-bg-layer-2,#eef1f5);white-space:nowrap;}
+        .drw-ccf-main p{margin:0;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-secondary,#68768a);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+        .drw-ccf-subline{font-size:11px;color:var(--dsw-alias-label-tertiary,#8a93a0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .drw-ccf-deadline{display:flex;flex-direction:column;gap:3px;text-align:right;}
+        .drw-ccf-deadline strong{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
+        .drw-ccf-deadline span{font-size:11.5px;font-weight:500;color:var(--dsw-alias-label-secondary,#5d6a7a);}
+        .drw-ccf-deadline small{font-size:9.5px;line-height:1.4;color:var(--dsw-alias-label-tertiary,#9aa3ae);}
+        .drw-ccf-links{text-align:right;font-size:11.5px;}
+        .drw-ccf-links a{color:var(--dsw-alias-label-link,#2f6fd0);text-decoration:none;white-space:nowrap;}
+        .drw-ccf-links a:hover{text-decoration:underline;}
+        .drw-ccf-links span{color:var(--dsw-alias-label-tertiary,#9aa3ae);}
+        .drw-ccf-empty{padding:44px 20px;text-align:center;font-size:12.5px;line-height:1.8;color:var(--dsw-alias-label-secondary,#68768a);}
+        .drw-ccf-footnote{display:flex;flex-direction:column;gap:5px;margin-top:auto;padding:16px 26px 26px;font-size:11px;line-height:1.7;color:var(--dsw-alias-label-tertiary,#8a93a0);}
+        .drw-ccf-footnote:before{content:"";display:block;height:1px;margin-bottom:9px;background:var(--dsw-alias-border-l3,#e6eaee);}
+        @media (max-width:900px){ .drw-ccf-stats{grid-template-columns:repeat(2,minmax(0,1fr));} .drw-ccf-filter{grid-template-columns:1fr 1fr;} .drw-ccf-row{grid-template-columns:34px minmax(0,1fr);} .drw-ccf-deadline{grid-column:2;text-align:left;} .drw-ccf-links{grid-column:2;text-align:left;} }
+        @media (max-width:740px){ .drw-ccf-header,.drw-ccf-stats,.drw-ccf-filter,.drw-ccf-databar,.drw-ccf-list,.drw-ccf-footnote{padding-left:18px;padding-right:18px;} .drw-ccf-filter{grid-template-columns:1fr;} .drw-ccf-warning{margin-left:18px;margin-right:18px;} }
       `;
 
       const inject = ['slots', 'layout'];
@@ -931,7 +1140,7 @@
                 onReturnChat: () => { ctx.layout.selectPanel(null); },
                 onOpenPanel: (id) => { ctx.layout.selectPanel(id); },
               }),
-            }, panel.id === 'research-papers' ? PaperPage : ArtifactPage);
+            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : ArtifactPage);
           }
         });
 

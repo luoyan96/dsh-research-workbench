@@ -1,9 +1,9 @@
 name: Publish npm
 
+# npm 上尚未发布本包，也没有配置 Trusted Publisher。标签推送不再自动发布，
+# 否则每个版本 tag 都会产生一次失败的运行；确认 npm 归属后改为手动触发。
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read

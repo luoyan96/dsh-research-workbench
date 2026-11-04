@@ -1,5 +1,5 @@
 /*
- * DSH Research Workbench v0.3.3 — native sidebar + keyed-main-panel MVP.
+ * DSH Research Workbench v0.4.0 — native sidebar and local file workspaces.
  * This file is a prebuilt browser module: the exact DSH __ModuleLoader__ ABI
  * used by current client bundles. No DOM scraping or React duplication.
  */
@@ -10,6 +10,10 @@
     factory: function (require) {
       const React = require('react');
       const h = React.createElement;
+      let nativeOfficeClient = null;
+      /* NATIVE_OFFICE_CLIENT */
+      let fileClient = null;
+      /* FILE_WORKSPACE_CLIENT */
 
       const PANELS = Object.freeze([
         { id:'research-proposals', kind:'proposal', order:20, title:'项目书', icon:'filetext', subtitle:'科技项目申报、可行性报告与中试平台建设' },
@@ -106,6 +110,106 @@
       const sectionLabel = kind => kind === 'slides' ? '幻灯片' : '章节';
       const textRows = (text, limit=28) => String(text || '').split('\n').slice(0,limit);
 
+      // Only editing/activity flags leave this browser. Update operations are
+      // owned by the Host, so switching panels does not lose their outcome.
+      const updateGuards = new Map(), updateListeners = new Set();
+      let updateView = { data: null, error: '', busy: false }, updatePending = false, updateFlight;
+      let updateClientId;
+      try {
+        updateClientId = sessionStorage.getItem('research-update-client') || makeId();
+        sessionStorage.setItem('research-update-client', updateClientId);
+      } catch { updateClientId = makeId(); }
+      const updateClient = () => ({ id: updateClientId, dirty: [...updateGuards.values()].some(x => x.dirty), busy: [...updateGuards.values()].some(x => x.busy) });
+      function publishUpdate(patch) { updateView = { ...updateView, ...patch }; for (const listen of updateListeners) listen(); }
+      async function updateRequest(input = { action: 'state' }) {
+        if (updatePending) {
+          if (input.action === 'state') return false;
+          await updateFlight;
+          return updateRequest(input);
+        }
+        let finish;
+        updateFlight = new Promise(resolve => { finish = resolve; });
+        updatePending = true;
+        const manual = input.action !== 'state';
+        if (manual) publishUpdate({ busy: true, error: '' });
+        try {
+          const response = await fetch('/api/research-workbench/updates', {
+            method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-research-workbench-updates': '1' },
+            body: JSON.stringify({ ...input, client: updateClient() }), signal: AbortSignal.timeout(20000),
+          });
+          let result;
+          try { result = await response.json(); }
+          catch { throw Error(`更新服务不可用（HTTP ${response.status}），请重启 DSH 后重试。`); }
+          if (!response.ok || !result.ok) throw Error(result.error || '无法读取插件更新状态。');
+          if (!updateView.data || result.value.revision >= updateView.data.revision) publishUpdate({ data: result.value, error: '' });
+          return true;
+        } catch (error) { publishUpdate({ error: error.message || '更新服务不可用，请重启 DSH 后重试。' }); return false; }
+        finally { updatePending = false; finish(); if (manual) publishUpdate({ busy: false }); }
+      }
+      function useUpdateGuard(key, dirty, busy) {
+        React.useEffect(() => {
+          updateGuards.set(key, { dirty, busy });
+          return () => { updateGuards.delete(key); };
+        }, [key, dirty, busy]);
+      }
+      const useUpdates = () => React.useSyncExternalStore(callback => { updateListeners.add(callback); return () => updateListeners.delete(callback); }, () => updateView);
+      function UpdateFooter({ subject } = {}) {
+        if (!['bundle', 'row'].includes(subject?.kind) || subject?.pkg?.name !== 'dsh-research-workbench') return null;
+        return h(ResearchUpdates, { detail: true });
+      }
+      function ResearchUpdates({ detail = false } = {}) {
+        const { data, error, busy } = useUpdates();
+        React.useEffect(() => {
+          if (!detail) return;
+          publishUpdate({ detailVisible: true });
+          return () => publishUpdate({ detailVisible: false });
+        }, [detail]);
+        const [confirming, setConfirming] = React.useState(false);
+        const [notes, setNotes] = React.useState(false);
+        const pending = busy || data?.installing;
+        const choice = action => updateRequest({ action, revision: data.revision, version: data.release?.version });
+        const install = async () => {
+          if (await updateRequest({ action: 'install', revision: data.revision, version: data.release.version, confirmation: 'update-research-plugin' })) setConfirming(false);
+        };
+        return h('section', { className: 'drw-updates', 'aria-label': '科研插件版本与更新' },
+          h('div', { className: 'drw-update-heading' }, h('h3', null, '版本与更新'), h('button', { disabled: pending, onClick: () => { setConfirming(false); void updateRequest({ action: 'check' }); } }, busy ? '正在处理…' : '检查更新')),
+          data ? h(React.Fragment, null,
+            h('p', null, '科研工作台 · 已安装 ', data.installedVersion || '暂不可读', data.runningVersion !== data.installedVersion ? ' · 本次运行 ' + data.runningVersion : ''),
+            h('p', { role: 'status' }, data.operation?.message || (!data.installedVersion ? '无法读取已安装版本，请在原生插件管理中核对。' : data.available ? `发现新版本：${data.installedVersion} → ${data.release.version}` : data.checkedAt && !data.lastError ? '当前没有更高的稳定版本' : '等待检查更新')),
+            data.checkedAt && h('p', { className: 'drw-update-muted' }, '上次检查成功：' + new Date(data.checkedAt).toLocaleString()),
+            data.lastError && h('p', { className: 'drw-update-error', role: 'alert' }, '检查失败：' + data.lastError),
+            data.available && h('div', { className: 'drw-update-actions' },
+              h('button', { className: 'drw-update-primary', disabled: pending || ['restart-required', 'unknown', 'restore-failed'].includes(data.operation?.status), onClick: () => setConfirming(true) }, data.installing ? '更新进行中…' : '更新此插件'),
+              h('button', { disabled: pending, onClick: () => choice('later') }, '明天再提醒'),
+              h('button', { disabled: pending, onClick: () => choice('ignore') }, data.ignoredVersion === data.release.version ? '已忽略此版本提醒' : '忽略此版本提醒')),
+            confirming && h('div', { className: 'drw-update-confirm', role: 'group', 'aria-label': '确认更新科研插件' },
+              h('strong', null, `确认更新到 ${data.release.version}？`),
+              h('p', null, '请先保存所有科研页面并结束任务。更新完成后需手动重启 DSH；失败时会尝试恢复原插件包。'),
+              h('div', { className: 'drw-update-actions' }, h('button', { className: 'drw-update-primary', disabled: pending, onClick: install }, '确认下载并更新'), h('button', { disabled: pending, onClick: () => setConfirming(false) }, '取消'))),
+            data.release && h(React.Fragment, null,
+              h('button', { 'aria-expanded': notes, onClick: () => setNotes(!notes) }, notes ? '收起更新记录' : '更新记录'),
+              notes && h('div', null, h('pre', null, data.release.notes || '此版本未提供更新说明。'), h('a', { href: data.release.page, target: '_blank', rel: 'noopener noreferrer' }, '在 GitHub 查看发行版'))),
+            h('label', { className: 'drw-update-preference' }, h('input', { type: 'checkbox', checked: data.checkEnabled, disabled: pending, onChange: event => updateRequest({ action: 'preferences', checkEnabled: event.target.checked, revision: data.revision }) }), '自动检查更新（每天一次，安装前需要确认）'),
+            data.deferredUntil > Date.now() && h('p', { className: 'drw-update-muted' }, '已暂停提醒至 ' + new Date(data.deferredUntil).toLocaleString()),
+          ) : h('p', null, '正在读取更新状态…'),
+          error && h('p', { className: 'drw-update-error', role: 'alert' }, error));
+      }
+      function UpdateReminder() {
+        const { data, busy, detailVisible } = useUpdates();
+        const [open, setOpen] = React.useState(false);
+        const dialog = React.useRef(null);
+        React.useEffect(() => {
+          if (data?.installing) dialog.current?.showModal();
+          return () => dialog.current?.close();
+        }, [data?.installing]);
+        if (data?.installing) return h('dialog', { ref: dialog, className: 'drw-update-progress', onCancel: event => event.preventDefault(), 'aria-label': '科研插件正在更新' }, h('h3', null, '正在更新科研工作台'), h('p', { role: 'status' }, data.operation?.message), h('p', null, '请等待更新结束。关闭这个页面不会取消宿主上的安装。'));
+        if (!data?.reminder || detailVisible || ['restart-required', 'unknown', 'restore-failed'].includes(data.operation?.status)) return null;
+        return h('aside', { className: 'drw-update-reminder', 'aria-label': '科研插件更新提醒' },
+          h('strong', null, '科研工作台有新版本 ' + data.release.version),
+          h('div', { className: 'drw-update-actions' }, h('button', { onClick: () => setOpen(!open), 'aria-expanded': open }, open ? '收起' : '查看更新'), h('button', { disabled: busy, onClick: () => updateRequest({ action: 'later', revision: data.revision }) }, '明天再提醒')),
+          open && h(ResearchUpdates));
+      }
+
       function ArtifactPage(props) {
         const kind = props.panel.kind;
         const [items, setItems] = React.useState([]);
@@ -130,6 +234,7 @@
         const mountedRef = React.useRef(true);
         draftRef.current = draft;
         selectedRef.current = selectedId;
+        useUpdateGuard('artifact-' + kind, (!!draft && JSON.stringify(draft) !== savedRef.current) || !!newTitle.trim(), busy || saving);
         React.useEffect(() => {
           mountedRef.current = true;
           let live = true;
@@ -447,12 +552,55 @@
         const [loading, setLoading] = React.useState(true);
         const [busy, setBusy] = React.useState(false);
         const [compiling, setCompiling] = React.useState(false);
+        const [compileJob, setCompileJob] = React.useState(null);
+        const [compileHistory, setCompileHistory] = React.useState([]);
+        const [historyId, setHistoryId] = React.useState('');
+        const [compileClock, setCompileClock] = React.useState(Date.now());
+        const compileRef = React.useRef(null);
+        const historyEpoch = React.useRef(0);
+        const historySelection = React.useRef('');
         const state = React.useRef({});
         const savePending = React.useRef(null);
         const mounted = React.useRef(true);
         const selectionEpoch = React.useRef(0);
         const uploadRef = React.useRef(null);
         state.current = { selected, files, activeFile, editor, saved, sha };
+        useUpdateGuard('papers', editor !== saved || !!newTitle.trim() || !!newFile.trim(), busy || compiling);
+
+        function applyCompile(id, record, pdfAvailable) {
+          if (!mounted.current || state.current.selected?.id !== id) return;
+          const previous = compileRef.current;
+          if (previous && record && (previous.startedAt > record.startedAt || (previous.id === record.id && previous.status !== 'running' && record.status === 'running'))) return;
+          compileRef.current = record;
+          setCompileJob(record);
+          setCompiling(record?.status === 'running');
+          if (!historySelection.current) setCompileLog(record?.log || '');
+          if (typeof pdfAvailable === 'boolean') setHasPdf(pdfAvailable);
+          if (record?.status === 'succeeded' && (previous?.id !== record.id || previous?.status !== record.status)) {
+            setPdfRevision(Date.now());
+          }
+          if (record && record.status !== 'running' && (previous?.id !== record.id || previous?.status === 'running')) {
+            void refreshCompileHistory(id).catch(e => { if (mounted.current && state.current.selected?.id === id) setError('无法读取编译历史：' + e.message); });
+          }
+        }
+        async function refreshCompileHistory(id) {
+          const result = await paperRequest(paperEndpoint(id, '/compiles'));
+          if (mounted.current && state.current.selected?.id === id) setCompileHistory(result.history);
+        }
+        async function selectCompileHistory(runId) {
+          setHistoryId(runId);
+          historySelection.current = runId;
+          const epoch = ++historyEpoch.current;
+          if (!runId) {
+            setCompileLog(compileRef.current?.log || '');
+            return;
+          }
+          const id = state.current.selected?.id;
+          try {
+            const result = await paperRequest(paperEndpoint(id, '/compiles/' + encodeURIComponent(runId)));
+            if (mounted.current && state.current.selected?.id === id && historyEpoch.current === epoch) setCompileLog(result.compile.log || '暂无编译输出');
+          } catch (e) { if (mounted.current && state.current.selected?.id === id) setError(e.message); }
+        }
 
         async function refreshList() {
           const result = await paperRequest('/papers');
@@ -527,7 +675,14 @@
             setFiles(data.files);
             setHasPdf(data.hasPdf);
             setPdfRevision(Date.now());
-            setCompileLog('');
+            ++historyEpoch.current;
+            historySelection.current = '';
+            setHistoryId('');
+            setCompileHistory([]);
+            compileRef.current = null;
+            applyCompile(id, data.compile, data.hasPdf);
+            try { window.sessionStorage?.setItem('dsh-rwb-selected-paper', id); } catch { /* optional UI preference */ }
+            void refreshCompileHistory(id).catch(e => { if (mounted.current && state.current.selected?.id === id) setError(e.message); });
             const target = data.files.find(file => file.path === preferredFile && file.editable)
               ?? data.files.find(file => file.editable);
             if (target) await readIntoEditor(id, target.path, epoch);
@@ -550,7 +705,9 @@
               const [list, health] = await Promise.all([refreshList(), paperRequest('/health')]);
               if (!mounted.current) return;
               setEngine(health.tectonic);
-              if (list.length > 0) await openProject(list[0].id);
+              let preferred;
+              try { preferred = window.sessionStorage?.getItem('dsh-rwb-selected-paper'); } catch { /* optional UI preference */ }
+              if (list.length > 0) await openProject(list.find(item => item.id === preferred)?.id || list[0].id);
             } catch (e) { if (mounted.current) setError(e.message); }
             finally { if (mounted.current) setLoading(false); }
           })();
@@ -559,6 +716,33 @@
             mounted.current = false; ++selectionEpoch.current;
           };
         }, []);
+        React.useEffect(() => {
+          const id = selected?.id;
+          if (!id) return;
+          let stopped = false;
+          let timer;
+          async function poll() {
+            try {
+              const result = await paperRequest(paperEndpoint(id, '/compile'));
+              if (!stopped) {
+                applyCompile(id, result.compile, result.hasPdf);
+                setError(current => current.startsWith('无法读取编译状态：') ? '' : current);
+              }
+            } catch (e) {
+              if (!stopped && mounted.current && state.current.selected?.id === id) setError('无法读取编译状态：' + e.message + '。恢复连接后会继续查询。');
+            } finally {
+              if (!stopped) timer = window.setTimeout(poll, compileRef.current?.status === 'running' ? 1000 : 3000);
+            }
+          }
+          void poll();
+          return () => { stopped = true; window.clearTimeout(timer); };
+        }, [selected?.id]);
+        React.useEffect(() => {
+          if (!compiling) return;
+          setCompileClock(Date.now());
+          const timer = window.setInterval(() => setCompileClock(Date.now()), 1000);
+          return () => window.clearInterval(timer);
+        }, [compiling]);
         React.useEffect(() => {
           if (!selected || !activeFile || editor === saved || busy || compiling) return;
           const timer = window.setTimeout(() => { void saveCurrent(); }, 1300);
@@ -651,24 +835,33 @@
         async function compileCurrent() {
           const id = selected?.id;
           if (!id || !(await saveCurrent())) return;
-          setCompiling(true); setError(''); setNotice('Tectonic 编译中…');
+          setCompiling(true); setError(''); setShowLog(true);
+          setHistoryId(''); ++historyEpoch.current; historySelection.current = '';
           try {
             const result = await paperRequest(paperEndpoint(id, '/compile'), { method:'POST', body:'{}' });
             if (mounted.current && state.current.selected?.id === id) {
-              setHasPdf(true); setPdfRevision(Date.now()); setCompileLog(result.log || '编译成功'); setShowLog(false);
-              setNotice('PDF 编译成功');
-              await refreshFiles(id);
+              applyCompile(id, result.compile);
             }
           } catch(e) {
-            if (mounted.current) {
+            if (mounted.current && state.current.selected?.id === id) {
               setError(e.message);
-              setCompileLog(e.log || e.message);
-              setShowLog(true);
-              if (e.code === 'ENGINE_MISSING') setEngine({ available:false,version:null });
+              const current = await paperRequest(paperEndpoint(id, '/compile')).catch(() => null);
+              if (current) applyCompile(id, current.compile, current.hasPdf);
+              else setCompiling(false);
             }
-          } finally { if (mounted.current) setCompiling(false); }
+          }
+        }
+        async function stopCompile() {
+          const id = selected?.id;
+          if (!id) return;
+          try {
+            const result = await paperRequest(paperEndpoint(id, '/compile/cancel'), { method:'POST', body:'{}' });
+            applyCompile(id, result.compile);
+          } catch (e) { if (mounted.current && state.current.selected?.id === id) setError(e.message); }
         }
         const dirty = editor !== saved;
+        const elapsed = compileJob ? Math.max(0, Math.floor(((compileJob.finishedAt ? Date.parse(compileJob.finishedAt) : compileClock) - Date.parse(compileJob.startedAt)) / 1000)) : 0;
+        const compileLabel = compileJob ? ({ running: '后台编译中', succeeded: '编译成功', failed: '编译失败', cancelled: '编译已停止', interrupted: '上次编译已中断' }[compileJob.status] || compileJob.status) : '尚未编译';
         const pdfUrl = selected ? PAPER_API + paperEndpoint(selected.id,'/pdf?rev='+pdfRevision) : '';
         return h('section', { className:'drw-paper', 'aria-label':'论文管理', 'data-research-panel':'research-papers' },
           h('header', { className:'drw-paper-header' },
@@ -718,7 +911,7 @@
               !selected ? h('div',{className:'drw-paper-empty'},
                 h('h2',null,loading?'正在加载本地论文项目…':'创建你的第一篇论文'),
                 h('p',null,loading?'': '在左侧输入论文标题并点击「创建」，自动生成 main.tex 和 references.bib。')
-              ) : h('div',{className:'drw-paper-editor-layout'},
+              ) : h('div',{className:'drw-paper-editor-layout'+(showLog?' has-compile-log':'')},
                 h('div',{className:'drw-paper-source'},
                   h('div',{className:'drw-paper-toolbar'},
                     h('div',{className:'drw-paper-file-heading'},
@@ -728,8 +921,14 @@
                     h('div',{className:'drw-paper-buttons'},
                       activeFile && h('a',{className:'drw-paper-button',href:PAPER_API+paperEndpoint(selected.id,'/download?path='+encodeURIComponent(activeFile)),download:true,title:'下载磁盘上已保存的文件版本'},'下载源码'),
                       h('button',{type:'button',className:'drw-paper-button',disabled:!dirty||busy,onClick:()=>void saveCurrent()},'保存'),
-                      h('button',{type:'button',className:'drw-paper-primary',disabled:compiling||busy,onClick:compileCurrent},compiling?'正在编译…':'编译 PDF')
+                      compiling && h('button',{type:'button',className:'drw-paper-button',onClick:stopCompile},'停止编译'),
+                      h('button',{type:'button',className:'drw-paper-primary',disabled:compiling||busy,onClick:compileCurrent},compiling?'后台编译中…':'编译 PDF')
                     )
+                  ),
+                  compileJob && h('div',{className:'drw-paper-compile-status','data-status':compileJob.status,role:'status'},
+                    h('strong',null,compileLabel),
+                    h('span',null,compiling ? `已运行 ${elapsed} 秒 · 切换页面后继续，返回可恢复日志。首次编译可能需要联网下载宏包。` : `${new Date(compileJob.finishedAt || compileJob.startedAt).toLocaleString()} · ${elapsed} 秒`),
+                    compileJob.error && h('span',null,compileJob.error)
                   ),
                   h('textarea',{className:'drw-paper-code',value:editor,spellCheck:false,'aria-label':'LaTeX 源码编辑器',
                     onChange:e=>{state.current.editor=e.target.value;setEditor(e.target.value);},
@@ -738,11 +937,17 @@
                     h('span',null,engine?.available ? `Tectonic: ${engine.version||'已安装'}` : '未检测到 Tectonic（需要本机安装才能编译）'),
                     h('button',{type:'button',className:'drw-paper-link',onClick:()=>setShowLog(v=>!v)},showLog?'关闭日志':'查看编译日志')
                   ),
-                  showLog && h('pre',{className:'drw-paper-log'},compileLog||'暂无编译日志')
+                  showLog && h('div',{className:'drw-paper-log-panel'},
+                    h('label',{className:'drw-paper-history'},'编译记录',h('select',{'aria-label':'编译记录',value:historyId,onChange:e=>void selectCompileHistory(e.target.value)},
+                      h('option',{value:''},'最近一次（编译时实时更新）'),
+                      compileHistory.map(item=>h('option',{key:item.id,value:item.id},`${new Date(item.startedAt).toLocaleString()} · ${{succeeded:'成功',failed:'失败',cancelled:'已停止',interrupted:'已中断'}[item.status] || item.status}`))
+                    )),
+                    h('pre',{className:'drw-paper-log','aria-label':'编译日志'},compileLog||'暂无编译日志')
+                  )
                 ),
                 h('div',{className:'drw-paper-preview'},
                   h('div',{className:'drw-paper-preview-header'},
-                    h('strong',null,'PDF 预览',dirty&&hasPdf?'（上次编译）':''),
+                    h('strong',null,'PDF 预览',hasPdf?'（上次成功编译）':''),
                     hasPdf && h('div',{className:'drw-paper-buttons'},
                       h('a',{href:pdfUrl,download:'main.pdf'},'下载 PDF'),
                       h('a',{href:pdfUrl,target:'_blank',rel:'noopener noreferrer'},'新窗口打开')
@@ -751,8 +956,8 @@
                   hasPdf ? h('iframe',{title:'论文 PDF 预览',src:pdfUrl,className:'drw-paper-pdf'})
                     : h('div',{className:'drw-paper-preview-empty'},
                         h(Icon,{name:'book',size:30}),
-                        h('strong',null,'还没有编译结果'),
-                        h('p',null,'保存 LaTeX 源码后点击「编译 PDF」，成功后在此预览。'),
+                        h('strong',null,compiling?'正在后台生成 PDF':compileJob?.error?'本次编译没有生成 PDF':'还没有编译结果'),
+                        h('p',null,compiling?'可以切换页面，编译状态和日志会保留。':compileJob?.error?'请查看编译日志；修正问题后可重新编译。':'保存 LaTeX 源码后点击「编译 PDF」，成功后在此预览。'),
                         !engine?.available && h('a',{href:'https://github.com/tectonic-typesetting/tectonic/releases/tag/tectonic%400.17.0',target:'_blank',rel:'noopener noreferrer'},'获取 Tectonic 0.17.0')
                       )
                 )
@@ -1015,6 +1220,17 @@
         .drw-paper-primary{border:1px solid var(--dsw-alias-label-primary,#222);background:var(--dsw-alias-label-primary,#222);color:var(--dsw-alias-bg-base,#fff);}
         .drw-paper-code{flex:1;width:100%;min-height:180px;resize:none;overflow:auto;border:0;border-radius:0;outline:none;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#222);padding:17px 18px;font:13px/1.75 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace!important;white-space:pre;tab-size:2;}
         .drw-paper-code:focus-visible{outline:2px solid var(--dsw-focus-ring-color,#6185b4);outline-offset:-2px;}
+        .drw-paper-compile-status{display:flex;flex-direction:column;gap:3px;padding:9px 15px;border-bottom:1px solid var(--dsw-alias-border-l3,#ddd);font-size:12px;flex:none;}
+        .drw-paper-compile-status strong{font-weight:600;}
+        .drw-paper-compile-status span{color:var(--dsw-alias-label-secondary,#666);line-height:1.5;}
+        .drw-paper-compile-status[data-status=failed],.drw-paper-compile-status[data-status=interrupted]{border-left:3px solid #b65040;}
+        .drw-paper-compile-status[data-status=running]{border-left:3px solid #3671c9;}
+        .drw-paper-log-panel{display:flex;flex-direction:column;min-height:100px;max-height:38%;flex:none;overflow:hidden;}
+        .drw-paper-history{display:flex;align-items:center;gap:8px;flex:none;padding:7px 14px;font-size:11px;}
+        .drw-paper-history select{max-width:100%;min-width:0;flex:1;font:inherit;padding:4px;border:1px solid var(--dsw-alias-border-l3,#ddd);border-radius:4px;background:var(--dsw-alias-bg-base,#fff);color:inherit;}
+        .drw-paper-log-panel .drw-paper-log{flex:1;max-height:none;min-height:60px;}
+        .drw-paper-editor-layout.has-compile-log .drw-paper-source{overflow-y:auto;}
+        .drw-paper-editor-layout.has-compile-log .drw-paper-code{min-height:140px;}
         .drw-paper-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;border-top:1px solid var(--dsw-alias-border-l3,#ddd);font-size:11px;color:var(--dsw-alias-label-secondary,#777);}
         .drw-paper-bottom>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
         .drw-paper-link{background:transparent;border:0;color:inherit;text-decoration:underline;white-space:nowrap;font-size:11px;}
@@ -1028,6 +1244,7 @@
         .drw-paper-preview-empty a{font-size:12px;color:var(--dsw-alias-label-primary,#333);text-decoration:underline;}
         .drw-paper-error{padding:10px 24px;border-bottom:1px solid #dbaaa0;background:#fff0eb;color:#a13f30;line-height:1.5;font-size:13px;}
         @media(max-width:1150px){.drw-paper-editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(370px,1fr) minmax(300px,1fr);overflow:auto;}.drw-paper-source{border-right:0;border-bottom:1px solid var(--dsw-alias-border-l3,#ddd);}.drw-paper-preview{min-height:320px;}}
+        @media(max-width:1150px){.drw-paper-editor-layout.has-compile-log{grid-template-rows:minmax(610px,1fr) minmax(320px,1fr);}}
         @media(max-width:700px){.drw-paper-workspace{grid-template-columns:1fr;overflow:auto;}.drw-paper-library{border-right:0;border-bottom:1px solid var(--dsw-alias-border-l3,#ddd);max-height:230px;}.drw-paper-main{min-height:510px;}.drw-paper-header{padding:16px;}}
 
         .drw-page { width:100%; height:100%; overflow-x:hidden; overflow-y:auto; box-sizing:border-box; color:var(--dsw-alias-label-primary,inherit); background:var(--dsw-alias-bg-base,transparent); font-family:inherit; font-size:14px; line-height:1.6; }
@@ -1117,14 +1334,37 @@
         @media (max-width:740px){ .drw-ccf-header,.drw-ccf-stats,.drw-ccf-filter,.drw-ccf-databar,.drw-ccf-list,.drw-ccf-footnote{padding-left:18px;padding-right:18px;} .drw-ccf-filter{grid-template-columns:1fr;} .drw-ccf-warning{margin-left:18px;margin-right:18px;} }
       `;
 
-      const inject = ['slots', 'layout'];
+      const UPDATE_CSS = `
+        .drw-updates{width:100%;min-width:0;padding:24px 0;border-top:1px solid var(--dsw-alias-border-l3,#ddd);font:14px/1.65 system-ui,sans-serif;color:var(--dsw-alias-label-primary,#202733)}
+        .drw-updates *{box-sizing:border-box}.drw-updates h3,.drw-updates p{margin:0 0 10px}.drw-update-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.drw-update-heading h3{font-size:16px}
+        .drw-updates button,.drw-update-reminder button{font:inherit;color:inherit;padding:7px 13px;min-height:36px;border:1px solid var(--dsw-alias-border-l3,#d7dce2);background:var(--dsw-alias-bg-layer-1,#fff);border-radius:8px;cursor:pointer;white-space:normal}.drw-updates button:disabled,.drw-update-reminder button:disabled{opacity:.55;cursor:wait}
+        .drw-updates .drw-update-primary{color:#fff;background:#202733;border-color:#202733}.drw-updates button:focus-visible,.drw-update-reminder button:focus-visible,.drw-updates a:focus-visible{outline:2px solid #526de5;outline-offset:3px}
+        .drw-update-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.drw-update-muted{color:var(--dsw-alias-label-secondary,#697586)}.drw-update-error{color:var(--dsw-alias-state-error-primary,#b42318);overflow-wrap:anywhere}
+        .drw-update-confirm{padding:16px;margin:16px 0;border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:10px;background:var(--dsw-alias-bg-layer-2,#f6f7f9)}.drw-update-confirm p{margin-top:8px}
+        .drw-updates pre{max-height:280px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.65 ui-monospace,Consolas,monospace;padding:16px;background:var(--dsw-alias-bg-layer-2,#f6f7f9);border-radius:8px}.drw-updates a{color:#526de5}
+        .drw-update-preference{display:flex;gap:8px;align-items:flex-start;margin:16px 0 8px}.drw-update-preference input{margin-top:6px;flex-shrink:0}
+        .drw-update-reminder{position:fixed;right:24px;bottom:24px;z-index:100;max-width:min(480px,calc(100vw - 32px));max-height:80vh;overflow:auto;padding:18px 22px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#202733);border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:12px;box-shadow:0 8px 32px #0002;font:14px/1.6 system-ui,sans-serif}
+        .drw-update-progress{max-width:min(480px,calc(100vw - 32px));padding:24px;border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:12px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#202733);font:14px/1.65 system-ui,sans-serif}.drw-update-progress::backdrop{background:#0005}
+      `;
+      const inject = ['slots', 'layout', 'remote', 'remote.settings', 'sessions'];
 
       function apply(ctx) {
+        nativeOfficeClient?.apply(ctx);
+        const fileRuntime = fileClient.createRuntime(ctx);
+        ctx.effect(() => {
+          void updateRequest();
+          const timer = setInterval(() => { void updateRequest(); }, 5000);
+          const close = () => { void fetch('/api/research-workbench/updates', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'content-type': 'application/json', 'x-research-workbench-updates': '1' }, body: JSON.stringify({ action: 'client-close', client: updateClient() }) }).catch(() => {}); };
+          window.addEventListener('pagehide', close);
+          return () => { clearInterval(timer); window.removeEventListener('pagehide', close); updateGuards.clear(); };
+        });
+        ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({ name: 'plugins.detail.section', id: 'research-workbench-updates', order: 1000 }, UpdateFooter));
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'research-workbench-update-reminder', order: 1000 }, UpdateReminder));
         // Theme-compatible styles, fully removed when this plugin is unloaded.
         ctx.effect(() => {
           const style = document.createElement('style');
           style.setAttribute('data-dsh-research-workbench', 'true');
-          style.textContent = CSS;
+          style.textContent = CSS + UPDATE_CSS + fileClient.css;
           document.head.appendChild(style);
           return () => { style.remove(); };
         }, 'research-workbench: styles');
@@ -1132,15 +1372,20 @@
         // DSH's root-scoped `main` is keyed; do not replace `conversation`.
         ctx.slots.inject('main', function* registerMainPanels() {
           for (const panel of PANELS) {
+            const filePanel = ['proposal', 'slides', 'ip'].includes(panel.kind);
+            const conversationKey = panel.id + '.file-conversation';
             yield ctx.slots.register({
               name: 'main',
               key: panel.id,
+              ...(filePanel ? { children: { [conversationKey]: { kind: 'single', scope: 'session' } } } : {}),
               inject: () => ({
                 panel,
+                ...(filePanel ? { runtime: fileRuntime, conversationKey, useUpdateGuard } : {}),
                 onReturnChat: () => { ctx.layout.selectPanel(null); },
                 onOpenPanel: (id) => { ctx.layout.selectPanel(id); },
               }),
-            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : ArtifactPage);
+            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : fileClient.FileWorkspace);
+            if (filePanel) ctx.slots.inject(conversationKey, () => ctx.slots.register({ name: conversationKey, inject: () => ({ useUpdateGuard }) }, fileClient.BoundConversation));
           }
         });
 

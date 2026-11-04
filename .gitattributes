@@ -3,3 +3,7 @@
 *.pptx binary
 *.png binary
 *.tgz binary
+vendor/copylee-office/** -text
+helper/OfficeHelper.cs text eol=lf
+lib/native-office.js text eol=lf
+lib/native-office.NOTICES.txt text eol=lf

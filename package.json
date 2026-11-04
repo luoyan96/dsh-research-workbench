@@ -1,15 +1,19 @@
 {
   "name": "dsh-research-workbench",
-  "version": "0.3.3",
-  "description": "DSH-native research workbench with DOCX/PPTX import and CCF conference deadline calendar",
+  "version": "0.4.0",
+  "description": "Research workbench with native WPS/Office co-editing, LaTeX projects and CCF conference deadlines",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
+    "./native-office": "./lib/native-office.js",
     "./package.json": "./package.json"
   },
   "dsh": {
+    "engines": {
+      "dsh": ">=0.2.1-rc.3"
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -18,17 +22,25 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-sidebar",
-        "@deepseek-ai/dsh-client-ui-renderer"
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run build && npm test",
+    "check": "npm run build && npm test && npm run test:office",
+    "test:office": "vitest run --config scripts/office-vitest.config.mjs",
     "pack:check": "npm pack --dry-run",
     "prepack": "npm run build"
   },
@@ -37,6 +49,12 @@
     "lib/client.js",
     "lib/papers.js",
     "lib/workbench/*.js",
+    "lib/native-office.js",
+    "lib/native-office.NOTICES.txt",
+    "lib/file-client.NOTICES.txt",
+    "helper/OfficeHelper.cs",
+    "vendor/copylee-office",
+    "NOTICE.md",
     "cordis.patch.yml",
     "README.md"
   ],
@@ -65,5 +83,13 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "3.18.4",
+    "@tabler/icons-react": "3.50.0",
+    "esbuild": "0.28.2",
+    "temml": "0.13.5",
+    "vitest": "4.1.12"
   }
 }

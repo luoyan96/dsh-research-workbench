@@ -8,6 +8,6 @@ if (manifest.name !== 'dsh-research-workbench') throw new Error('Unexpected pack
 const src = await readFile(resolve(root, 'src/client.js'), 'utf8');
 if (!src.includes('window.__ModuleLoader__.load({')) throw new Error('Missing DSH browser module registration');
 await mkdir(resolve(root, 'lib/workbench'), { recursive: true });
-const files=['index.js','client.js','papers.js','workbench/content.js','workbench/office.js','workbench/office-import.js','workbench/tools.js','workbench/deadlines.js'];
+const files=['index.js','client.js','papers.js','workbench/content.js','workbench/office.js','workbench/office-import.js','workbench/tools.js','workbench/deadlines.js','workbench/updates.js','workbench/update-archive.js'];
 await Promise.all(files.map(file=>copyFile(resolve(root, 'src',file),resolve(root,'lib',file))));
 console.log('Prepared DSH host, native browser panels, paper service, artifact studio & Office exporters (zero external runtime dependencies).');

@@ -564,5 +564,5 @@ export function createPaperService(options = {}) {
       return sendJson(res, status, { ok: false, code: e instanceof PaperError ? e.code : 'INTERNAL_ERROR', error: e instanceof PaperError ? e.message : '服务内部错误', ...(e.log ? {log:e.log} : {}) });
     }
   }
-  return { root, handle, list, create, details, readSource, saveSource, upload, rename, archive, compile, startCompile, compileStatus, compileHistory, cancelCompile, dispose, probe, pdf };
+  return { root, handle, list, create, details, readSource, saveSource, upload, rename, archive, compile, startCompile, compileStatus, compileHistory, cancelCompile, dispose, probe, pdf, isCompiling: () => activeCompiles.size > 0 };
 }

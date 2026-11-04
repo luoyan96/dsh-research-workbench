@@ -12,6 +12,7 @@ function makeReact() {
     useRef: initial => ({ current: initial }),
     useEffect: () => {},
     useCallback: cb => cb,
+    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
     createElement: (type, props, ...children) => ({
       type,
       props: {
@@ -112,7 +113,7 @@ test('checked-in client artifacts are exactly regenerated from their source', as
   assert.equal(await read('lib/client.js'), await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
-  for (const name of ['content','office','tools','deadlines']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
+  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
 test('browser module registers five native DSH main pages and sidebar rows in order', async () => {
@@ -126,8 +127,9 @@ test('browser module registers five native DSH main pages and sidebar rows in or
   // Re-run in a global with both fields, keeping its same module-loader contract.
   let entry;
   vm.runInNewContext(await read('lib/client.js'), {
-    window: { __ModuleLoader__: { load(value) { entry = value; } } },
+    window: { __ModuleLoader__: { load(value) { entry = value; } }, addEventListener() {}, removeEventListener() {} },
     document: host.document,
+    setInterval: () => 1, clearInterval() {},
   }, { timeout: 2500 });
   const plugin = entry.factory((name) => {
     assert.equal(name, 'react');
@@ -149,6 +151,10 @@ test('browser module registers five native DSH main pages and sidebar rows in or
     ['research-ccf', 'CCF 截稿', 60],
   ]);
   assert.equal(host.elementStyles.length, 1);
+  const updates = host.registrations.find(x => x.options.name === 'plugins.detail.section');
+  assert.ok(updates, 'updates belong to the native plugin detail page');
+  assert.equal(updates.Component({ subject: { kind: 'bundle', pkg: { name: 'other-plugin' } } }), null);
+  assert.match(textOf(updates.Component({ subject: { kind: 'bundle', pkg: { name: 'dsh-research-workbench' } } })), /版本与更新/);
   assert.match(host.elementStyles[0].textContent, /\.drw-artifact-workspace/);
   for (const record of sidebar) {
     const icon = record.Component({ size: 20, active: false });

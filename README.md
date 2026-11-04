@@ -116,6 +116,18 @@ dsh plugin --profile web add dsh-research-workbench@latest
 
 ## 技术与安全边界
 
+### 开发分支：科研插件独立更新（尚未发布）
+
+原生「插件 → dsh-research-workbench」详情页增加「版本与更新」。默认每天检查本仓库的 GitHub 稳定 Release；有新版时显示提醒、版本对照和更新说明，可以选择明天提醒或忽略该版本。自动检查可以关闭；安装始终需要点击并确认，不会静默安装或强制重启。
+
+确认后下载固定仓库的 tgz，核对 GitHub 提供的 SHA-256、大小、包名、版本及 bundle 入口，再交给 DSH 原生 `pluginManager` 安装。安装前保存旧插件包；失败时尝试恢复，并明确报告无法确认的恢复结果。更新期间阻止科研页面继续操作；存在未保存修改、编译或 Agent 任务时拒绝开始。需要重启时只提示手动重启。
+
+检查记录、提醒选项和安装结果保存在当前 profile 的 `research-workbench-updates.json`，安装包与恢复包在 `research-workbench-update-cache/`。科研成果目录独立保存。更新接口是 Connection 认证的精确 POST 路由 `/api/research-workbench/updates`，不向模型开放安装工具。新包使用本地缓存路径登记为 profile 的依赖，该缓存应保留。
+
+旧版 0.3.1 / 已公开的 0.3.3 本身没有此更新入口，仍需先安装一次带更新功能的新发行版。AcceptCat 启动时还需配套“只补装缺失或较旧插件”的修复，避免下一次启动把独立更新的版本降回安装包内置版。当前开发分支保持原包版本；发布时必须使用新版本号及新的 Release，不能覆盖现有 v0.3.3 资产。
+
+已在独立临时 profile 中用 AcceptCat 内置 DSH 0.2.1-rc.3 验证原生详情页、真实 GitHub 检查和 Connection 未认证 401；用标明合成版本号的旧包执行了真实 v0.3.3 下载、校验和原生安装。失败恢复等边界由隔离管理器测试覆盖，真实账号 profile 尚未执行更新。
+
 - Host：`src/index.js` + `src/papers.js` + `src/workbench/`，浏览器：`src/client.js`；预构建文件位于 `lib/`。
 - 使用 `sidebar.panellist` 与 `main` keyed slots，保留原有 DSH Session/Workspace。
 - 本地 Web API：`/research-workbench/api`（论文）、`/research-workbench/content`（项目书/PPT/知识产权）及 `/research-workbench/deadlines`（CCF 日历，只读 GET）。仅允许本机 loopback，所有读写请求都必须经过 DSH Connection 有效浏览器会话认证，拒绝显式跨站 Origin；Windows Desktop 认证代理剥离 Origin 后的请求同样受认证保护。所有文件写入限制在插件数据目录。

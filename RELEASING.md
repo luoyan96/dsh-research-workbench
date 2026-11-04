@@ -45,6 +45,10 @@ npm publish --access public
 
 ## 可靠性和已知限制
 
+`feat/integrate-native-office` 已完整纳入 @copylee/dsh-office 1.2.0（固定提交 2069af2），作为科研 bundle 的第二个原生组件；源码与许可证位于 vendor/copylee-office。发布前检查根 NOTICE、打包后的 SDK 许可文本、helper/OfficeHelper.cs、lib/native-office.js 和客户端模块均包含在 tgz 中；不要去执行或改动快照里的上游发布工作流。新增 npm devDependencies 仅用于构建/验证，运行所需库已打入 bundle，独立 Office 包不是运行依赖。
+
+开发版仍未增加版本号，不能覆盖公开 v0.3.3。正式发布前必须为本批编译、更新及 Office 融合功能分配新版本号并生成新 Release。SDK/适配以 DSH 0.2.1-rc.3 为实测基线；原生 Office 仅在 Windows 上加载。Office/WPS 应用兼容限制沿用上游说明；微软 Office 完整三件套及带模型的真实账号长流程尚未验收。
+
 独立更新开发分支已增加 GitHub Release 更新入口（未发布，不可覆盖 v0.3.3）。发新版前需为本批编译修复和更新功能分配新版本号、打包并在新 Release 上传对应 tgz，确保 GitHub API 返回 `sha256:` digest。安装包大小上限 16 MiB；检查成功、下载成功、安装成功与重启后生效是不同状态。
 
 Windows 隔离实测：AcceptCat 自带 DSH 0.2.1-rc.3、全新 DSH_HOME 和科研数据目录；用包含更新代码且仅版本号为合成 0.3.2 的测试包，确认后下载公开 v0.3.3（59586 字节，SHA256 a7b0d4ac36b8c84d5b0e9ada056bc0569480a47adce9e8a53ed53cf248dc4ac1），DSH 原生安装实际成功，磁盘记录 `restart-required`。目标公开旧包尚无更新 UI，因此热加载后入口消失属此测试目标的预期限制；后续正式新版必须保留更新代码。自动恢复、摘要不匹配、双重确认、忙碌保护和状态持久化另有离线测试。不得把上述合成旧版本当作公开 0.3.2 的完整升级验收。

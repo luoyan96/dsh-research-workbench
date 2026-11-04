@@ -10,6 +10,8 @@
     factory: function (require) {
       const React = require('react');
       const h = React.createElement;
+      let nativeOfficeClient = null;
+      /* NATIVE_OFFICE_CLIENT */
 
       const PANELS = Object.freeze([
         { id:'research-proposals', kind:'proposal', order:20, title:'项目书', icon:'filetext', subtitle:'科技项目申报、可行性报告与中试平台建设' },
@@ -1342,9 +1344,10 @@
         .drw-update-reminder{position:fixed;right:24px;bottom:24px;z-index:100;max-width:min(480px,calc(100vw - 32px));max-height:80vh;overflow:auto;padding:18px 22px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#202733);border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:12px;box-shadow:0 8px 32px #0002;font:14px/1.6 system-ui,sans-serif}
         .drw-update-progress{max-width:min(480px,calc(100vw - 32px));padding:24px;border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:12px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#202733);font:14px/1.65 system-ui,sans-serif}.drw-update-progress::backdrop{background:#0005}
       `;
-      const inject = ['slots', 'layout'];
+      const inject = ['slots', 'layout', 'remote', 'remote.settings'];
 
       function apply(ctx) {
+        nativeOfficeClient?.apply(ctx);
         ctx.effect(() => {
           void updateRequest();
           const timer = setInterval(() => { void updateRequest(); }, 5000);

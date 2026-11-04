@@ -110,16 +110,17 @@ test('manifest declares a DSH self-activating client bundle', async () => {
 });
 
 test('checked-in client artifacts are exactly regenerated from their source', async () => {
-  assert.equal(await read('lib/client.js'), await read('src/client.js'));
+  const client = (await read('lib/client.js')).replace(/\/\* NATIVE_OFFICE_BEGIN \*\/[\s\S]*?\/\* NATIVE_OFFICE_END \*\//, '/* NATIVE_OFFICE_CLIENT */');
+  assert.equal(client, await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
-  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
+  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
 test('browser module registers five native DSH main pages and sidebar rows in order', async () => {
   const { id, module } = loadBrowserModule(await read('lib/client.js'));
   assert.equal(id, 'dsh-research-workbench');
-  assert.deepEqual(Array.from(module.inject), ['slots', 'layout']);
+  assert.deepEqual(Array.from(module.inject), ['slots', 'layout', 'remote', 'remote.settings']);
   assert.equal(typeof module.apply, 'function');
 
   const host = fakeHost();
@@ -153,6 +154,7 @@ test('browser module registers five native DSH main pages and sidebar rows in or
   assert.equal(host.elementStyles.length, 1);
   const updates = host.registrations.find(x => x.options.name === 'plugins.detail.section');
   assert.ok(updates, 'updates belong to the native plugin detail page');
+  assert.ok(host.registrations.some(x => x.options.name === 'settings.section' && x.options.id === 'research-native-office'));
   assert.equal(updates.Component({ subject: { kind: 'bundle', pkg: { name: 'other-plugin' } } }), null);
   assert.match(textOf(updates.Component({ subject: { kind: 'bundle', pkg: { name: 'dsh-research-workbench' } } })), /版本与更新/);
   assert.match(host.elementStyles[0].textContent, /\.drw-artifact-workspace/);

@@ -2,3 +2,5 @@
 - insert:
     - id: research-workbench
       name: 'dsh-research-workbench'
+    - id: research-native-office
+      name: 'dsh-research-workbench/native-office'

@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { promises as fs, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { backupPlugin, verifyPluginArchive } from './update-archive.js';
+import { nativeOfficeBusy } from './native-office-activity.js';
 
 export const UPDATE_ROUTE = '/api/research-workbench/updates';
 export const PLUGIN_NAME = 'dsh-research-workbench';
@@ -111,7 +112,7 @@ export function createUpdateService(options) {
   }
   async function ensureIdle() {
     if (!clients.size || [...clients.values()].some(client => now() - client.at > 30000 || client.dirty || client.busy)) throw Error('请保存科研工作台中的修改、停止任务并关闭多余窗口后重试；失联窗口可在手动重启 DSH 后清除。');
-    if (!(await options.canInstall?.())) throw Error('DSH 或论文编译仍在工作，暂时不能更新插件。');
+    if (!(await options.canInstall?.())) throw Error('DSH、论文编译或 Office 任务仍在工作，暂时不能更新插件。');
   }
   async function choice(input) {
     await initialize();
@@ -233,7 +234,7 @@ export function registerResearchUpdates(ctx, papers) {
             const agents = owner.get('agents').list();
             let jobs;
             try { jobs = owner.get('jobs')?.list?.() || []; } catch { jobs = []; }
-            return Array.isArray(agents) && agents.every(agent => agent.status === 'idle') && Array.isArray(jobs) && jobs.every(job => ['completed', 'killed', 'failed'].includes(job.status)) && !sharedService.papers.isCompiling();
+            return Array.isArray(agents) && agents.every(agent => agent.status === 'idle') && Array.isArray(jobs) && jobs.every(job => ['completed', 'killed', 'failed'].includes(job.status)) && !sharedService.papers.isCompiling() && !nativeOfficeBusy();
           } catch { return false; }
         } });
         sharedService.service = service;

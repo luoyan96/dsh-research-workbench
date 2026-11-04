@@ -4,6 +4,24 @@
 
 **v0.3.3** 在 Office 导入（`.docx` / `.pptx`，保留原件与受限的原版式文字修改）之上，新增 CCF 投稿截止日历。已通过离线测试与 Office 文件解析/渲染验证；**Windows DSH 实机验收仍需要使用者运行本版测试**。
 
+## 当前开发分支：内置 WPS / Office 协作（尚未发布）
+
+完整纳入 [@copylee/dsh-office 1.2.0](https://github.com/copylee711/dsh-office) 的源码、Windows helper、设置页、提示指引、测试及文档。保留原作者 Copy 的 MIT 许可与署名，36 个上游文件逐字节固定；来源及适配说明见 [NOTICE.md](NOTICE.md)。该开发分支也包含前面的编译持久化和插件独立更新修复，不代表已公开的 v0.3.3 已具备这些能力。
+
+安装此分支的打包产物后，「科研工作台」和「原生 Office」作为同一 bundle 的两个组件加载，无需另装独立 Office 插件。Windows 上支持在本机 Word / Excel / PowerPoint 或 WPS 文字 / 表格 / 演示中打开、新建、读取、编辑、渲染、保存和关闭自己创建的文档；公式、脚注、模板、图表等能力沿用上游实现。既有五个科研界面保持原样，后续再按使用反馈调整。
+
+「设置 → Office / WPS」选择办公套件、静默模式、逐字写入、迷你卡片、视觉检查及图片宽度。设置保存在 `research-native-office`，与独立插件的设置分开；已有独立插件可以共存，融合组件不覆盖其工具或配置。
+
+插件更新会等待 Office 命令以及回合结束后的后台保存/关闭完成；同时有多个办公 Agent 时，全部结束后才统一收尾。
+
+融合后的八个工具为 `research_office_open/status/read/edit/help/render/save/close`。示例：
+
+> 使用科研插件的 research_office 工具，在 WPS 中修改 D:\科研\项目书.docx，保留格式并另存为修改版。
+
+原生 Office 文件与工作台里的结构化草稿分别保存。修改一个导出的 Word/PPT，不会自动回写工作台草稿；模型指引明确区分两条路径。LaTeX 论文仍沿用原来的编辑、编译和历史日志，不交给 Office 工具处理。
+
+已验证：DSH 0.2.1-rc.3 隔离 profile 加载、双插件共存、设置写入、未认证状态接口返回 401；真实 WPS 三件套的合成文件创建/编辑/渲染/保存/关闭/重新打开。自动检查包括科研插件、融合适配与完整上游单元测试。未执行真实账号的整段模型任务，未发布、未替换现用安装。
+
 ## v0.3.3：CCF 投稿截止日历
 
 - 左侧栏增加「CCF 截稿」入口；在简体中文与英文版 DSH 中，通过有限范围的 CSS 将重复的原生「更多」按钮隐藏，原「插件」管理功能仍在「插件」页。若 DSH 更换 DOM 或语言，该隐藏可能不再生效，但日历入口仍可使用。
@@ -130,7 +148,7 @@ dsh plugin --profile web add dsh-research-workbench@latest
 
 - Host：`src/index.js` + `src/papers.js` + `src/workbench/`，浏览器：`src/client.js`；预构建文件位于 `lib/`。
 - 使用 `sidebar.panellist` 与 `main` keyed slots，保留原有 DSH Session/Workspace。
-- 本地 Web API：`/research-workbench/api`（论文）、`/research-workbench/content`（项目书/PPT/知识产权）及 `/research-workbench/deadlines`（CCF 日历，只读 GET）。仅允许本机 loopback，所有读写请求都必须经过 DSH Connection 有效浏览器会话认证，拒绝显式跨站 Origin；Windows Desktop 认证代理剥离 Origin 后的请求同样受认证保护。所有文件写入限制在插件数据目录。
+- 本地科研 Web API：`/research-workbench/api`（论文）、`/research-workbench/content`（项目书/PPT/知识产权）及 `/research-workbench/deadlines`（CCF 日历，只读 GET）。仅允许本机 loopback，所有读写请求都必须经过 DSH Connection 有效浏览器会话认证，拒绝显式跨站 Origin；Windows Desktop 认证代理剥离 Origin 后的请求同样受认证保护。科研资料 API 的写入限制在插件数据目录；原生 Office 工具另按指定路径操作本机文档，可位于该目录之外。
 - CCF 数据来自第三方公开快照，插件只读取外部 JSON（12 秒超时、3 MB 上限、6 小时缓存），不向会议官网发起请求，也不上传任何本地内容；缓存写入插件数据目录，断网时回退到上一次快照并明确标注“离线缓存”。
 - Office 文件导出使用纯 Node.js Open XML 生成器，无外部运行时依赖、无 Word/PowerPoint 安装要求。DOCX/PPTX 在 Word/PowerPoint 中仍需完成最终人工校对。
 - 不生成或执行 Office 宏；Patent/Softcopyright 不提供自动官方提交；不自动联网下载陌生代码或执行实验。
@@ -144,7 +162,7 @@ npm run check
 npm pack
 ```
 
-源码未拷贝 Mimir 的代码；仅参考其科研插件的功能组织方式。该仓库在所有者选择并发布许可之前，继续沿用既有的 `UNLICENSED` 标识。
+科研工作台未拷贝 Mimir 的代码；仅参考其功能组织方式。原生 Office 部分完整纳入 Copy 的 MIT 源码并保留许可。其他原创部分在所有者选择并发布许可之前，继续沿用既有的 `UNLICENSED` 标识；各部分的许可边界见 [NOTICE.md](NOTICE.md)。
 
 ## v0.3.1 Windows Desktop 认证兼容修复
 

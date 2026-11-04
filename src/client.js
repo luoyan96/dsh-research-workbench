@@ -12,6 +12,8 @@
       const h = React.createElement;
       let nativeOfficeClient = null;
       /* NATIVE_OFFICE_CLIENT */
+      let fileClient = null;
+      /* FILE_WORKSPACE_CLIENT */
 
       const PANELS = Object.freeze([
         { id:'research-proposals', kind:'proposal', order:20, title:'项目书', icon:'filetext', subtitle:'科技项目申报、可行性报告与中试平台建设' },
@@ -1344,10 +1346,11 @@
         .drw-update-reminder{position:fixed;right:24px;bottom:24px;z-index:100;max-width:min(480px,calc(100vw - 32px));max-height:80vh;overflow:auto;padding:18px 22px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#202733);border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:12px;box-shadow:0 8px 32px #0002;font:14px/1.6 system-ui,sans-serif}
         .drw-update-progress{max-width:min(480px,calc(100vw - 32px));padding:24px;border:1px solid var(--dsw-alias-border-l3,#d7dce2);border-radius:12px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#202733);font:14px/1.65 system-ui,sans-serif}.drw-update-progress::backdrop{background:#0005}
       `;
-      const inject = ['slots', 'layout', 'remote', 'remote.settings'];
+      const inject = ['slots', 'layout', 'remote', 'remote.settings', 'sessions'];
 
       function apply(ctx) {
         nativeOfficeClient?.apply(ctx);
+        const fileRuntime = fileClient.createRuntime(ctx);
         ctx.effect(() => {
           void updateRequest();
           const timer = setInterval(() => { void updateRequest(); }, 5000);
@@ -1361,7 +1364,7 @@
         ctx.effect(() => {
           const style = document.createElement('style');
           style.setAttribute('data-dsh-research-workbench', 'true');
-          style.textContent = CSS + UPDATE_CSS;
+          style.textContent = CSS + UPDATE_CSS + fileClient.css;
           document.head.appendChild(style);
           return () => { style.remove(); };
         }, 'research-workbench: styles');
@@ -1369,15 +1372,20 @@
         // DSH's root-scoped `main` is keyed; do not replace `conversation`.
         ctx.slots.inject('main', function* registerMainPanels() {
           for (const panel of PANELS) {
+            const filePanel = ['proposal', 'slides', 'ip'].includes(panel.kind);
+            const conversationKey = panel.id + '.file-conversation';
             yield ctx.slots.register({
               name: 'main',
               key: panel.id,
+              ...(filePanel ? { children: { [conversationKey]: { kind: 'single', scope: 'session' } } } : {}),
               inject: () => ({
                 panel,
+                ...(filePanel ? { runtime: fileRuntime, conversationKey, useUpdateGuard } : {}),
                 onReturnChat: () => { ctx.layout.selectPanel(null); },
                 onOpenPanel: (id) => { ctx.layout.selectPanel(id); },
               }),
-            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : ArtifactPage);
+            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : fileClient.FileWorkspace);
+            if (filePanel) ctx.slots.inject(conversationKey, () => ctx.slots.register({ name: conversationKey, inject: () => ({ useUpdateGuard }) }, fileClient.BoundConversation));
           }
         });
 

@@ -26,7 +26,10 @@
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-locale"
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
   },
@@ -48,6 +51,7 @@
     "lib/workbench/*.js",
     "lib/native-office.js",
     "lib/native-office.NOTICES.txt",
+    "lib/file-client.NOTICES.txt",
     "helper/OfficeHelper.cs",
     "vendor/copylee-office",
     "NOTICE.md",
@@ -83,6 +87,7 @@
   "devDependencies": {
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
     "@deepseek-ai/schemastery": "3.18.4",
+    "@tabler/icons-react": "3.50.0",
     "esbuild": "0.28.2",
     "temml": "0.13.5",
     "vitest": "4.1.12"

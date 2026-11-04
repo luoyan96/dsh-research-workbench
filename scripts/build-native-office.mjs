@@ -42,12 +42,15 @@ const statusBridge = `  // Research integration: Connection admits authenticated
 export function adaptOfficeSource(filename, original) {
   let source = original.replaceAll('\r\n', '\n').replaceAll('office_', 'research_office_').replaceAll("'dsh-office'", "'research-workbench-office'");
   if (filename.endsWith('/src/index.ts')) {
-    source = "import { trackOfficeCall } from '../../../src/workbench/native-office-activity.js';\n" + source;
+    source = "import { trackOfficeCall, afterOfficeTransactions } from '../../../src/workbench/native-office-activity.js';\n" + source;
     source = replaceOnce(source, "export const name = '@copylee/dsh-office'", "export const name = 'dsh-research-workbench/native-office'");
     source = replaceOnce(source, "name: 'office:guide'", "name: 'research-office:guide'");
     source = replaceOnce(source, '=> client.call<T>(cmd, { suite: settings().suite, ...args }, timeoutMs),', '=> trackOfficeCall(() => client.call<T>(cmd, { suite: settings().suite, ...args }, timeoutMs)),');
     source = replaceOnce(source, 'const working = new WeakSet<object>()', 'const working = new Set<object>()');
     source = replaceOnce(source, '    working.delete(agent)\n', '    working.delete(agent)\n    if (working.size > 0) return // Other Office agents still own background work.\n');
+    source = replaceOnce(source, "    void helper.call('card', { text: 'AI 已完成'", "    afterOfficeTransactions(() => {\n      if (working.size > 0) return\n      void helper.call('card', { text: 'AI 已完成'");
+    source = replaceOnce(source, "    void helper.call<string[]>('settle', {}, 60_000).then(said => { for (const line of said) ctx.logger.info(`office: ${line}`) }).catch(() => {})\n  }", "      void helper.call<string[]>('settle', {}, 60_000).then(said => { for (const line of said) ctx.logger.info(`office: ${line}`) }).catch(() => {})\n    })\n  }");
+    source = replaceOnce(source, '  const tools = createTools({', "  // The research file UI shares this exact helper and settings with model tools.\n  ;(ctx as any).reflect.provide('researchOffice', { call: helper.call, settings }, undefined)\n\n  const tools = createTools({");
     const start = source.indexOf('  // Settings page bridge');
     const end = source.indexOf("  ctx.inject(['systemPrompt']", start);
     if (start < 0 || end < 0) throw Error('Office status adapter no longer matches upstream');
@@ -83,6 +86,7 @@ export function adaptOfficeHelper(source) {
   source = replaceOnce(source, '        Sweep();\n        SweepOwn();', '        // Research integration: never kill processes based on stale PID notes.');
   source = removeCsMethod(source, '    static void SweepOwn()');
   source = removeCsMethod(source, '    static void Sweep()');
+  source = replaceOnce(source, '            doc.Save();\n            result["path"] = (string)doc.FullName;', '            bool readOnly = false;\n            try { readOnly = Truthy(doc.ReadOnly); } catch (Exception) { }\n            if (readOnly) throw new Fail("READ_ONLY", "The document is read-only or locked by another Office instance. Close the other instance or save a copy with a new path; do not retry an in-place save.");\n            doc.Save();\n            result["path"] = (string)doc.FullName;');
   return '// Integrated from @copylee/dsh-office 1.2.0 (MIT); see vendor/copylee-office/LICENSE and NOTICE.md.\n' + source.replaceAll('"dsh-office"', '"research-workbench-office"');
 }
 

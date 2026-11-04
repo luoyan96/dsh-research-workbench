@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as office from '../lib/native-office.js';
 import { verifyOfficeSource, adaptOfficeHelper, OFFICE_STATUS } from '../scripts/build-native-office.mjs';
-import { nativeOfficeBusy, trackOfficeCall } from '../src/workbench/native-office-activity.js';
+import { nativeOfficeBusy, trackOfficeCall, trackOfficeTransaction } from '../src/workbench/native-office-activity.js';
 
 const read = name => readFile(new URL('../' + name, import.meta.url), 'utf8');
 const names = ['open', 'status', 'read', 'edit', 'help', 'render', 'save', 'close'].map(name => 'research_office_' + name);
@@ -89,6 +89,7 @@ test('pending background save/close remains busy after agent idle and clears on 
 test('host integration contributes tools, guidance and an authenticated exact POST route', { skip: process.platform !== 'win32' }, () => {
   const definitions = [], routes = [], sections = [], disposers = [];
   const ctx = {
+    reflect: { provide() {} },
     tools: { register(definition) { definitions.push(definition); return () => {}; } },
     attachments: { saveImage: async () => { throw Error('unexpected render'); } },
     logger: { warn() {}, info() {} },
@@ -118,6 +119,7 @@ test('host waits for every Office agent before settling, and updates stay blocke
   };
   const ctx = {
     tools: { register() { return () => {}; } }, attachments: {}, logger: { warn() {}, info() {} },
+    reflect: { provide() {} },
     effect(factory) { const dispose = factory(); if (dispose) disposers.push(dispose); },
     on(name, handler) { hooks.set(name, handler); }, get(name) { return this[name]; },
     connection: { fetch: { register() { return () => {}; } } },
@@ -130,7 +132,11 @@ test('host waits for every Office agent before settling, and updates stay blocke
     hooks.get('tools/pre-execute')({ name: 'research_office_edit', agent: b }, () => {});
     hooks.get('agent/status')({ agent: a, status: 'idle' });
     assert.deepEqual(calls, [], 'one idle agent must not close another agent’s documents');
+    let finishPreview;
+    const preview = trackOfficeTransaction(() => new Promise(resolve => { finishPreview = resolve; }));
     hooks.get('agent/status')({ agent: b, status: 'idle' });
+    assert.deepEqual(calls, [], 'silent-mode cleanup must not close a document mid-preview');
+    finishPreview(); await preview;
     assert.deepEqual(calls, ['card', 'settle']);
     assert.equal(nativeOfficeBusy(), true, 'agent idle is not the end of a background save');
     finish([]); await new Promise(resolve => setImmediate(resolve));

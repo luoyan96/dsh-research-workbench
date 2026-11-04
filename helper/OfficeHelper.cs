@@ -1048,6 +1048,9 @@ static class Program
         if (path == null)
         {
             if (((string)doc.Path).Length == 0) throw new Fail("NEEDS_PATH", "This document has never been saved: give \"path\" to say where.");
+            bool readOnly = false;
+            try { readOnly = Truthy(doc.ReadOnly); } catch (Exception) { }
+            if (readOnly) throw new Fail("READ_ONLY", "The document is read-only or locked by another Office instance. Close the other instance or save a copy with a new path; do not retry an in-place save.");
             doc.Save();
             result["path"] = (string)doc.FullName;
         }

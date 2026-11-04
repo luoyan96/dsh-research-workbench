@@ -12,6 +12,7 @@ function makeReact() {
     useRef: initial => ({ current: initial }),
     useEffect: () => {},
     useCallback: cb => cb,
+    forwardRef: render => props => render(props, null),
     useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
     createElement: (type, props, ...children) => ({
       type,
@@ -110,17 +111,17 @@ test('manifest declares a DSH self-activating client bundle', async () => {
 });
 
 test('checked-in client artifacts are exactly regenerated from their source', async () => {
-  const client = (await read('lib/client.js')).replace(/\/\* NATIVE_OFFICE_BEGIN \*\/[\s\S]*?\/\* NATIVE_OFFICE_END \*\//, '/* NATIVE_OFFICE_CLIENT */');
+  const client = (await read('lib/client.js')).replace(/\/\* NATIVE_OFFICE_BEGIN \*\/[\s\S]*?\/\* NATIVE_OFFICE_END \*\//, '/* NATIVE_OFFICE_CLIENT */').replace(/\/\* FILE_WORKSPACE_BEGIN \*\/[\s\S]*?\/\* FILE_WORKSPACE_END \*\//, '/* FILE_WORKSPACE_CLIENT */');
   assert.equal(client, await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
-  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
+  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','files']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
 test('browser module registers five native DSH main pages and sidebar rows in order', async () => {
   const { id, module } = loadBrowserModule(await read('lib/client.js'));
   assert.equal(id, 'dsh-research-workbench');
-  assert.deepEqual(Array.from(module.inject), ['slots', 'layout', 'remote', 'remote.settings']);
+  assert.deepEqual(Array.from(module.inject), ['slots', 'layout', 'remote', 'remote.settings', 'sessions']);
   assert.equal(typeof module.apply, 'function');
 
   const host = fakeHost();
@@ -166,7 +167,8 @@ test('browser module registers five native DSH main pages and sidebar rows in or
   const proposal = main[0];
   const proposalPage = proposal.Component(proposal.options.inject());
   assert.match(textOf(proposalPage), /项目书/);
-  assert.match(textOf(proposalPage), /新建一份结构完整/);
+  assert.match(textOf(proposalPage), /上传文件或模板/);
+  assert.doesNotMatch(textOf(proposalPage), /选用模板|实验室共享文件|新建项目书|章节标题/);
   const returnChat = flatten(proposalPage).filter(x => x?.type === 'button').find(x => textOf(x).includes('返回聊天'));
   assert.ok(returnChat);
   await returnChat.props.onClick();

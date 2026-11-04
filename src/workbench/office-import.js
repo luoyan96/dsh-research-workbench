@@ -40,9 +40,9 @@ function safeName(name) {
     !name.includes('\0') && !name.split('/').some(p => p === '..' || p === '.');
 }
 
-export function openOfficeZip(input) {
+export function openOfficeZip(input, { maxBytes = OFFICE_IMPORT_MAX_BYTES } = {}) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  if (buf.length > OFFICE_IMPORT_MAX_BYTES) fail('OFFICE_TOO_LARGE', '单个 DOCX / PPTX 文件不能超过 12 MiB');
+  if (buf.length > maxBytes) fail('OFFICE_TOO_LARGE', 'Office 文件超过大小限制');
   if (buf.length < 22) fail('INVALID_OFFICE', '文件不是有效的 DOCX / PPTX ZIP 包');
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
@@ -70,7 +70,7 @@ export function openOfficeZip(input) {
     inflatedTotal += uncompressedSize;
     if (uncompressedSize > 80 * 1024 * 1024 || inflatedTotal > 300 * 1024 * 1024)
       fail('OFFICE_TOO_LARGE', 'Office 文件包含解压后体积过大的附件');
-    if ((flag & 1) || (method !== 0 && method !== 8) || compressedSize > OFFICE_IMPORT_MAX_BYTES)
+    if ((flag & 1) || (method !== 0 && method !== 8) || compressedSize > maxBytes)
       fail('INVALID_OFFICE', 'Office ZIP 含加密或不支持的压缩项');
     if (localPos + 30 > buf.length || buf.readUInt32LE(localPos) !== 0x04034b50) fail('INVALID_OFFICE', 'Office ZIP 本地目录损坏');
     const localName = buf.readUInt16LE(localPos + 26), localExtra = buf.readUInt16LE(localPos + 28);
@@ -97,8 +97,8 @@ export function openOfficeZip(input) {
   return {items,get};
 }
 
-export function replaceOfficeXml(source, replacements) {
-  const zip = openOfficeZip(source);
+export function replaceOfficeXml(source, replacements, options) {
+  const zip = openOfficeZip(source, options);
   const locals = [], central = [];
   let pos = 0;
   for (const entry of zip.items.values()) {

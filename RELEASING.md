@@ -10,6 +10,14 @@
 
 浏览器使用内嵌浏览器、真实 React 插件组件及隔离 HTTP 服务，编译器为可控测试替身：验证切换到聊天再返回、刷新恢复、历史选择、跨论文状态、停止和 1536/1024 宽窗口，未发现浏览器警告或错误。此项不等同于现装 AcceptCat 的升级验收；未替换真实 profile、读取私人论文、发布 Release 或更新 npm。项目书/PPT 界面的编辑器选型仍待比较现有 DSH 插件，本批不做大规模重写。
 
+## 未发布：本地文件工作区（2026-11-04）
+
+三个成果入口改为「上传本地文件/模板 → 实际 Office 页面预览 + DSH 原生对话」。首版只处理 DOCX/DOTX 与 PPTX/POTX（80 MiB），不包含模板库和实验室共享入口；上传原件备份、工作副本、独立会话绑定和文件操作记录均独立保存。模板复制为普通 Office 工作文件，原版式及媒体部件保留；论文和 CCF 页面不重写。
+
+新增 `/research-workbench/files` API、`research_file_current` 和原生 `conversation.content` Factory 的嵌入。发布包必须包含 `lib/workbench/files.js`、打入客户端的文件页面、Tabler 许可文本，宿主需具备 DSH 0.2.1-rc.3 的 Session reference 与 Conversation Factory API。此分支仍未发布，不可覆盖公开 v0.3.3。
+
+实机在独立 DSH_HOME/数据目录中执行，真实 WPS 处理合成文件，本地模拟 LLM 通过实际 Agent loop 调用工具。在线账号的任务理解与修改质量、微软 Office 兼容矩阵仍需另外验收。
+
 ## 发布到 GitHub
 
 `main` 上的 v0.3.3 已提交并打了 `v0.3.3` 标签，可直接安装：
@@ -53,4 +61,4 @@ npm publish --access public
 
 Windows 隔离实测：AcceptCat 自带 DSH 0.2.1-rc.3、全新 DSH_HOME 和科研数据目录；用包含更新代码且仅版本号为合成 0.3.2 的测试包，确认后下载公开 v0.3.3（59586 字节，SHA256 a7b0d4ac36b8c84d5b0e9ada056bc0569480a47adce9e8a53ed53cf248dc4ac1），DSH 原生安装实际成功，磁盘记录 `restart-required`。目标公开旧包尚无更新 UI，因此热加载后入口消失属此测试目标的预期限制；后续正式新版必须保留更新代码。自动恢复、摘要不匹配、双重确认、忙碌保护和状态持久化另有离线测试。不得把上述合成旧版本当作公开 0.3.2 的完整升级验收。
 
-目前通过离线自动测试、OOXML 解包和 LibreOffice 渲染，**未执行你当前 Windows DSH 实机的完整 UI/Agent 验证**。在确认工具调用、导出和自动保存符合预期前，暂不建议将此版公开推广给其他用户。
+当前开发包已通过自动测试、OOXML 解包，以及隔离 Windows DSH/WPS 的实际预览、原生会话、保存下载和模拟模型工具链验收；模板副本另外验证原生编辑保存。只读工作副本会立即报错，后台收尾等待预览/保存事务完成。尚未替换实际账号 profile，也未执行在线模型的复杂任务验收，正式发版需要使用真实材料复核。

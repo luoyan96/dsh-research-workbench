@@ -2,11 +2,11 @@
 
 将 **项目书、PPT、论文、专利与软著、CCF 截稿日历** 五个原生工作台直接加入 DeepSeek Harness（DSH）左侧导航。插件采用 Cordis + Slots，使用 DSH 现有会话和工作区，不 Fork DSH、不替换品牌和主聊天界面。
 
-**v0.3.3** 在 Office 导入（`.docx` / `.pptx`，保留原件与受限的原版式文字修改）之上，新增 CCF 投稿截止日历。已通过离线测试与 Office 文件解析/渲染验证；**Windows DSH 实机验收仍需要使用者运行本版测试**。
+**v0.4.0** 将项目书、PPT、专利与软著改为「上传自己的文件或模板 → 实际页面预览 + AI 对话 → 保存下载」，内置 WPS / Office 协作、插件独立更新，并修复论文切换页面后编译状态和日志丢失。原件保留，AI 修改工作副本；模板库和实验室共享文件暂不提供。要求 DSH 0.2.1-rc.3 或兼容新版；本地 Office 文件流程需要 Windows 与可用的 WPS / Office。
 
-## 当前开发分支：内置 WPS / Office 协作（尚未发布）
+## v0.4.0：内置 WPS / Office 协作
 
-完整纳入 [@copylee/dsh-office 1.2.0](https://github.com/copylee711/dsh-office) 的源码、Windows helper、设置页、提示指引、测试及文档。保留原作者 Copy 的 MIT 许可与署名，36 个上游文件逐字节固定；来源及适配说明见 [NOTICE.md](NOTICE.md)。该开发分支也包含前面的编译持久化和插件独立更新修复，不代表已公开的 v0.3.3 已具备这些能力。
+完整纳入 [@copylee/dsh-office 1.2.0](https://github.com/copylee711/dsh-office) 的源码、Windows helper、设置页、提示指引、测试及文档。保留原作者 Copy 的 MIT 许可与署名，36 个上游文件逐字节固定；来源及适配说明见 [NOTICE.md](NOTICE.md)。v0.4.0 也包含编译持久化和插件独立更新修复；v0.3.3 及更旧版本没有这些能力。
 
 安装此分支的打包产物后，「科研工作台」和「原生 Office」作为同一 bundle 的两个组件加载，无需另装独立 Office 插件。Windows 上支持在本机 Word / Excel / PowerPoint 或 WPS 文字 / 表格 / 演示中打开、新建、读取、编辑、渲染、保存和关闭自己创建的文档；公式、脚注、模板、图表等能力沿用上游实现。项目书、PPT、专利与软著三个入口已改为下面的本地文件流程；论文和 CCF 界面沿用原有功能。
 
@@ -20,9 +20,9 @@
 
 原生 Office 文件与工作台里的结构化草稿分别保存。修改一个导出的 Word/PPT，不会自动回写工作台草稿；模型指引明确区分两条路径。LaTeX 论文仍沿用原来的编辑、编译和历史日志，不交给 Office 工具处理。
 
-已验证：DSH 0.2.1-rc.3 隔离 profile 加载、双插件共存、设置写入、未认证状态接口返回 401；真实 WPS 三件套的合成文件创建/编辑/渲染/保存/关闭/重新打开。自动检查包括科研插件、融合适配与完整上游单元测试。未执行真实账号的整段模型任务，未发布、未替换现用安装。
+已验证：DSH 0.2.1-rc.3 隔离 profile 加载、双插件共存、设置写入、未认证状态接口返回 401；真实 WPS 三件套的合成文件创建/编辑/渲染/保存/关闭/重新打开。自动检查包括科研插件、融合适配与完整上游单元测试。在线模型的复杂任务质量和微软 Office 兼容矩阵仍需实际材料验收；隔离验证不会替换用户现用安装。
 
-## 当前开发分支：上传文件 → 预览与 AI 对话（尚未发布）
+## v0.4.0：上传文件 → 预览与 AI 对话
 
 项目书、PPT、专利与软著共用文件工作区。首页只保留「上传文件或模板」、需求输入框和最近文件；首版不做内置模板库或实验室共享文件入口。上传后左侧显示 Office/WPS 的实际页面渲染，右侧嵌入 DSH 原生 `conversation.content` Factory，沿用模型选择、工具授权、取消、附件和持久化会话；不是独立的仿聊天窗口。
 
@@ -72,7 +72,7 @@
 
 论文模块保留 v0.2.0 的本地文件管理和 Tectonic 编译器调用。Tectonic 不是插件自带的：需要已安装并在 `PATH` 中，或设置 `DSH_RWB_TECTONIC_PATH`，或将官方 Windows 程序放在 `C:\Tools\Tectonic\tectonic.exe`。编译本地陌生 TeX 文件有风险，请只运行受信任来源。
 
-**当前开发分支的编译修复（尚未发布）**：点击“编译 PDF”后立即建立宿主后台任务，页面显示实际运行时间、实时输出和停止按钮。切换面板、选择其他论文或刷新页面不会取消编译；返回时恢复所选论文的任务状态、日志和已有 PDF。成功、失败、超时和手动停止都保留编译记录，界面可选择最近 20 次记录；失败不覆盖上一次成功的 PDF，预览明确标为“上次成功编译”。
+**v0.4.0 编译修复**：点击“编译 PDF”后立即建立宿主后台任务，页面显示实际运行时间、实时输出和停止按钮。切换面板、选择其他论文或刷新页面不会取消编译；返回时恢复所选论文的任务状态、日志和已有 PDF。成功、失败、超时和手动停止都保留编译记录，界面可选择最近 20 次记录；失败不覆盖上一次成功的 PDF，预览明确标为“上次成功编译”。
 
 状态和每次记录保存在论文目录 `build/compile.json` 与 `build/compiles/<任务ID>.json`，保留受限长度的输出及 Tectonic `main.log` 尾部。默认编译上限从 120 秒调整为 10 分钟，为首次宏包下载留出时间；没有编造百分比或下载进度。**后台运行依赖 DSH 宿主进程**：关闭/重启 DSH 会停止编译，历史日志保留，进程意外退出后的未完成任务会显示“已中断”，不会自动声称成功或无提示重跑。
 
@@ -92,10 +92,10 @@
 
 ## 安装
 
-### 直接安装 GitHub main（v0.3.3 已推送）
+### 安装固定版本 v0.4.0
 
 ```powershell
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.4.0"
 dsh web
 ```
 
@@ -105,16 +105,18 @@ Windows Desktop 使用的是 `desktop` Profile，请把 `--profile web` 换成 `
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#main"
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.4.0"
 ```
 
 再次启动 DSH，Windows Desktop 建议完全退出并重开。如果浏览器界面未更新，可按 `Ctrl+Shift+R`。
 
-### 从 `.tgz` 安装（不依赖 GitHub 或 npm 首发）
+### 从 GitHub Release 的 `.tgz` 安装
+
+在 [v0.4.0 Release](https://github.com/luoyan96/dsh-research-workbench/releases/tag/v0.4.0) 下载 `dsh-research-workbench-0.4.0.tgz`，退出 DSH 后安装：
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.3.3.tgz"
+dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.4.0.tgz"
 ```
 
 ### npm 正式发布后
@@ -137,7 +139,7 @@ dsh plugin --profile web add dsh-research-workbench@latest
 
 ## 技术与安全边界
 
-### 开发分支：科研插件独立更新（尚未发布）
+### v0.4.0：科研插件独立更新
 
 原生「插件 → dsh-research-workbench」详情页增加「版本与更新」。默认每天检查本仓库的 GitHub 稳定 Release；有新版时显示提醒、版本对照和更新说明，可以选择明天提醒或忽略该版本。自动检查可以关闭；安装始终需要点击并确认，不会静默安装或强制重启。
 
@@ -145,7 +147,7 @@ dsh plugin --profile web add dsh-research-workbench@latest
 
 检查记录、提醒选项和安装结果保存在当前 profile 的 `research-workbench-updates.json`，安装包与恢复包在 `research-workbench-update-cache/`。科研成果目录独立保存。更新接口是 Connection 认证的精确 POST 路由 `/api/research-workbench/updates`，不向模型开放安装工具。新包使用本地缓存路径登记为 profile 的依赖，该缓存应保留。
 
-旧版 0.3.1 / 已公开的 0.3.3 本身没有此更新入口，仍需先安装一次带更新功能的新发行版。AcceptCat 启动时还需配套“只补装缺失或较旧插件”的修复，避免下一次启动把独立更新的版本降回安装包内置版。当前开发分支保持原包版本；发布时必须使用新版本号及新的 Release，不能覆盖现有 v0.3.3 资产。
+旧版 0.3.1 / 0.3.3 本身没有此更新入口，需先手动安装一次 v0.4.0 或更新版本。AcceptCat 启动时还需配套“只补装缺失或较旧插件”的修复，避免下一次启动把独立更新的版本降回安装包内置版。后续版本均使用新版本号和新的 Release，不覆盖旧版资产。
 
 已在独立临时 profile 中用 AcceptCat 内置 DSH 0.2.1-rc.3 验证原生详情页、真实 GitHub 检查和 Connection 未认证 401；用标明合成版本号的旧包执行了真实 v0.3.3 下载、校验和原生安装。失败恢复等边界由隔离管理器测试覆盖，真实账号 profile 尚未执行更新。
 

@@ -43,7 +43,8 @@ async function fixture(t, mode = 'normal') {
     },
   };
   const release = { id: 123, tag_name: 'v0.3.4', body: '新增后台编译与更新。\n<script>not executable</script>', assets: [{ name: `${PLUGIN_NAME}-0.3.4.tgz`, size: bytes.length, digest, browser_download_url: `https://github.com/luoyan96/${PLUGIN_NAME}/releases/download/v0.3.4/${PLUGIN_NAME}-0.3.4.tgz` }] };
-  const options = { directory: profile, manager, now: () => clock, canInstall: () => idle, fetchImpl: async url => {
+  // This fixture runs an old build while installing a newer one, independently of the repository's current release.
+  const options = { version: '0.3.3', directory: profile, manager, now: () => clock, canInstall: () => idle, fetchImpl: async url => {
     if (broken) return new Response('offline', { status: 503 });
     if (String(url).includes('api.github.com')) return Response.json(release);
     return new Response(bytes);

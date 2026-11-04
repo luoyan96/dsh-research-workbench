@@ -8,6 +8,7 @@ export const inject = ['webServer', 'connection'];
 
 export function apply(ctx) {
   const papers = createPaperService({ connection: ctx.connection });
+  ctx.effect(() => () => papers.dispose(), 'research-workbench: stop compiler on unload');
   const contents = createContentService({ connection: ctx.connection });
   const deadlines = createDeadlineService({ connection: ctx.connection });
   ctx.effect(() => ctx.webServer.register({

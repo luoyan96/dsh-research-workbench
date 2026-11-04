@@ -447,12 +447,54 @@
         const [loading, setLoading] = React.useState(true);
         const [busy, setBusy] = React.useState(false);
         const [compiling, setCompiling] = React.useState(false);
+        const [compileJob, setCompileJob] = React.useState(null);
+        const [compileHistory, setCompileHistory] = React.useState([]);
+        const [historyId, setHistoryId] = React.useState('');
+        const [compileClock, setCompileClock] = React.useState(Date.now());
+        const compileRef = React.useRef(null);
+        const historyEpoch = React.useRef(0);
+        const historySelection = React.useRef('');
         const state = React.useRef({});
         const savePending = React.useRef(null);
         const mounted = React.useRef(true);
         const selectionEpoch = React.useRef(0);
         const uploadRef = React.useRef(null);
         state.current = { selected, files, activeFile, editor, saved, sha };
+
+        function applyCompile(id, record, pdfAvailable) {
+          if (!mounted.current || state.current.selected?.id !== id) return;
+          const previous = compileRef.current;
+          if (previous && record && (previous.startedAt > record.startedAt || (previous.id === record.id && previous.status !== 'running' && record.status === 'running'))) return;
+          compileRef.current = record;
+          setCompileJob(record);
+          setCompiling(record?.status === 'running');
+          if (!historySelection.current) setCompileLog(record?.log || '');
+          if (typeof pdfAvailable === 'boolean') setHasPdf(pdfAvailable);
+          if (record?.status === 'succeeded' && (previous?.id !== record.id || previous?.status !== record.status)) {
+            setPdfRevision(Date.now());
+          }
+          if (record && record.status !== 'running' && (previous?.id !== record.id || previous?.status === 'running')) {
+            void refreshCompileHistory(id).catch(e => { if (mounted.current && state.current.selected?.id === id) setError('无法读取编译历史：' + e.message); });
+          }
+        }
+        async function refreshCompileHistory(id) {
+          const result = await paperRequest(paperEndpoint(id, '/compiles'));
+          if (mounted.current && state.current.selected?.id === id) setCompileHistory(result.history);
+        }
+        async function selectCompileHistory(runId) {
+          setHistoryId(runId);
+          historySelection.current = runId;
+          const epoch = ++historyEpoch.current;
+          if (!runId) {
+            setCompileLog(compileRef.current?.log || '');
+            return;
+          }
+          const id = state.current.selected?.id;
+          try {
+            const result = await paperRequest(paperEndpoint(id, '/compiles/' + encodeURIComponent(runId)));
+            if (mounted.current && state.current.selected?.id === id && historyEpoch.current === epoch) setCompileLog(result.compile.log || '暂无编译输出');
+          } catch (e) { if (mounted.current && state.current.selected?.id === id) setError(e.message); }
+        }
 
         async function refreshList() {
           const result = await paperRequest('/papers');
@@ -527,7 +569,14 @@
             setFiles(data.files);
             setHasPdf(data.hasPdf);
             setPdfRevision(Date.now());
-            setCompileLog('');
+            ++historyEpoch.current;
+            historySelection.current = '';
+            setHistoryId('');
+            setCompileHistory([]);
+            compileRef.current = null;
+            applyCompile(id, data.compile, data.hasPdf);
+            try { window.sessionStorage?.setItem('dsh-rwb-selected-paper', id); } catch { /* optional UI preference */ }
+            void refreshCompileHistory(id).catch(e => { if (mounted.current && state.current.selected?.id === id) setError(e.message); });
             const target = data.files.find(file => file.path === preferredFile && file.editable)
               ?? data.files.find(file => file.editable);
             if (target) await readIntoEditor(id, target.path, epoch);
@@ -550,7 +599,9 @@
               const [list, health] = await Promise.all([refreshList(), paperRequest('/health')]);
               if (!mounted.current) return;
               setEngine(health.tectonic);
-              if (list.length > 0) await openProject(list[0].id);
+              let preferred;
+              try { preferred = window.sessionStorage?.getItem('dsh-rwb-selected-paper'); } catch { /* optional UI preference */ }
+              if (list.length > 0) await openProject(list.find(item => item.id === preferred)?.id || list[0].id);
             } catch (e) { if (mounted.current) setError(e.message); }
             finally { if (mounted.current) setLoading(false); }
           })();
@@ -559,6 +610,33 @@
             mounted.current = false; ++selectionEpoch.current;
           };
         }, []);
+        React.useEffect(() => {
+          const id = selected?.id;
+          if (!id) return;
+          let stopped = false;
+          let timer;
+          async function poll() {
+            try {
+              const result = await paperRequest(paperEndpoint(id, '/compile'));
+              if (!stopped) {
+                applyCompile(id, result.compile, result.hasPdf);
+                setError(current => current.startsWith('无法读取编译状态：') ? '' : current);
+              }
+            } catch (e) {
+              if (!stopped && mounted.current && state.current.selected?.id === id) setError('无法读取编译状态：' + e.message + '。恢复连接后会继续查询。');
+            } finally {
+              if (!stopped) timer = window.setTimeout(poll, compileRef.current?.status === 'running' ? 1000 : 3000);
+            }
+          }
+          void poll();
+          return () => { stopped = true; window.clearTimeout(timer); };
+        }, [selected?.id]);
+        React.useEffect(() => {
+          if (!compiling) return;
+          setCompileClock(Date.now());
+          const timer = window.setInterval(() => setCompileClock(Date.now()), 1000);
+          return () => window.clearInterval(timer);
+        }, [compiling]);
         React.useEffect(() => {
           if (!selected || !activeFile || editor === saved || busy || compiling) return;
           const timer = window.setTimeout(() => { void saveCurrent(); }, 1300);
@@ -651,24 +729,33 @@
         async function compileCurrent() {
           const id = selected?.id;
           if (!id || !(await saveCurrent())) return;
-          setCompiling(true); setError(''); setNotice('Tectonic 编译中…');
+          setCompiling(true); setError(''); setShowLog(true);
+          setHistoryId(''); ++historyEpoch.current; historySelection.current = '';
           try {
             const result = await paperRequest(paperEndpoint(id, '/compile'), { method:'POST', body:'{}' });
             if (mounted.current && state.current.selected?.id === id) {
-              setHasPdf(true); setPdfRevision(Date.now()); setCompileLog(result.log || '编译成功'); setShowLog(false);
-              setNotice('PDF 编译成功');
-              await refreshFiles(id);
+              applyCompile(id, result.compile);
             }
           } catch(e) {
-            if (mounted.current) {
+            if (mounted.current && state.current.selected?.id === id) {
               setError(e.message);
-              setCompileLog(e.log || e.message);
-              setShowLog(true);
-              if (e.code === 'ENGINE_MISSING') setEngine({ available:false,version:null });
+              const current = await paperRequest(paperEndpoint(id, '/compile')).catch(() => null);
+              if (current) applyCompile(id, current.compile, current.hasPdf);
+              else setCompiling(false);
             }
-          } finally { if (mounted.current) setCompiling(false); }
+          }
+        }
+        async function stopCompile() {
+          const id = selected?.id;
+          if (!id) return;
+          try {
+            const result = await paperRequest(paperEndpoint(id, '/compile/cancel'), { method:'POST', body:'{}' });
+            applyCompile(id, result.compile);
+          } catch (e) { if (mounted.current && state.current.selected?.id === id) setError(e.message); }
         }
         const dirty = editor !== saved;
+        const elapsed = compileJob ? Math.max(0, Math.floor(((compileJob.finishedAt ? Date.parse(compileJob.finishedAt) : compileClock) - Date.parse(compileJob.startedAt)) / 1000)) : 0;
+        const compileLabel = compileJob ? ({ running: '后台编译中', succeeded: '编译成功', failed: '编译失败', cancelled: '编译已停止', interrupted: '上次编译已中断' }[compileJob.status] || compileJob.status) : '尚未编译';
         const pdfUrl = selected ? PAPER_API + paperEndpoint(selected.id,'/pdf?rev='+pdfRevision) : '';
         return h('section', { className:'drw-paper', 'aria-label':'论文管理', 'data-research-panel':'research-papers' },
           h('header', { className:'drw-paper-header' },
@@ -718,7 +805,7 @@
               !selected ? h('div',{className:'drw-paper-empty'},
                 h('h2',null,loading?'正在加载本地论文项目…':'创建你的第一篇论文'),
                 h('p',null,loading?'': '在左侧输入论文标题并点击「创建」，自动生成 main.tex 和 references.bib。')
-              ) : h('div',{className:'drw-paper-editor-layout'},
+              ) : h('div',{className:'drw-paper-editor-layout'+(showLog?' has-compile-log':'')},
                 h('div',{className:'drw-paper-source'},
                   h('div',{className:'drw-paper-toolbar'},
                     h('div',{className:'drw-paper-file-heading'},
@@ -728,8 +815,14 @@
                     h('div',{className:'drw-paper-buttons'},
                       activeFile && h('a',{className:'drw-paper-button',href:PAPER_API+paperEndpoint(selected.id,'/download?path='+encodeURIComponent(activeFile)),download:true,title:'下载磁盘上已保存的文件版本'},'下载源码'),
                       h('button',{type:'button',className:'drw-paper-button',disabled:!dirty||busy,onClick:()=>void saveCurrent()},'保存'),
-                      h('button',{type:'button',className:'drw-paper-primary',disabled:compiling||busy,onClick:compileCurrent},compiling?'正在编译…':'编译 PDF')
+                      compiling && h('button',{type:'button',className:'drw-paper-button',onClick:stopCompile},'停止编译'),
+                      h('button',{type:'button',className:'drw-paper-primary',disabled:compiling||busy,onClick:compileCurrent},compiling?'后台编译中…':'编译 PDF')
                     )
+                  ),
+                  compileJob && h('div',{className:'drw-paper-compile-status','data-status':compileJob.status,role:'status'},
+                    h('strong',null,compileLabel),
+                    h('span',null,compiling ? `已运行 ${elapsed} 秒 · 切换页面后继续，返回可恢复日志。首次编译可能需要联网下载宏包。` : `${new Date(compileJob.finishedAt || compileJob.startedAt).toLocaleString()} · ${elapsed} 秒`),
+                    compileJob.error && h('span',null,compileJob.error)
                   ),
                   h('textarea',{className:'drw-paper-code',value:editor,spellCheck:false,'aria-label':'LaTeX 源码编辑器',
                     onChange:e=>{state.current.editor=e.target.value;setEditor(e.target.value);},
@@ -738,11 +831,17 @@
                     h('span',null,engine?.available ? `Tectonic: ${engine.version||'已安装'}` : '未检测到 Tectonic（需要本机安装才能编译）'),
                     h('button',{type:'button',className:'drw-paper-link',onClick:()=>setShowLog(v=>!v)},showLog?'关闭日志':'查看编译日志')
                   ),
-                  showLog && h('pre',{className:'drw-paper-log'},compileLog||'暂无编译日志')
+                  showLog && h('div',{className:'drw-paper-log-panel'},
+                    h('label',{className:'drw-paper-history'},'编译记录',h('select',{'aria-label':'编译记录',value:historyId,onChange:e=>void selectCompileHistory(e.target.value)},
+                      h('option',{value:''},'最近一次（编译时实时更新）'),
+                      compileHistory.map(item=>h('option',{key:item.id,value:item.id},`${new Date(item.startedAt).toLocaleString()} · ${{succeeded:'成功',failed:'失败',cancelled:'已停止',interrupted:'已中断'}[item.status] || item.status}`))
+                    )),
+                    h('pre',{className:'drw-paper-log','aria-label':'编译日志'},compileLog||'暂无编译日志')
+                  )
                 ),
                 h('div',{className:'drw-paper-preview'},
                   h('div',{className:'drw-paper-preview-header'},
-                    h('strong',null,'PDF 预览',dirty&&hasPdf?'（上次编译）':''),
+                    h('strong',null,'PDF 预览',hasPdf?'（上次成功编译）':''),
                     hasPdf && h('div',{className:'drw-paper-buttons'},
                       h('a',{href:pdfUrl,download:'main.pdf'},'下载 PDF'),
                       h('a',{href:pdfUrl,target:'_blank',rel:'noopener noreferrer'},'新窗口打开')
@@ -751,8 +850,8 @@
                   hasPdf ? h('iframe',{title:'论文 PDF 预览',src:pdfUrl,className:'drw-paper-pdf'})
                     : h('div',{className:'drw-paper-preview-empty'},
                         h(Icon,{name:'book',size:30}),
-                        h('strong',null,'还没有编译结果'),
-                        h('p',null,'保存 LaTeX 源码后点击「编译 PDF」，成功后在此预览。'),
+                        h('strong',null,compiling?'正在后台生成 PDF':compileJob?.error?'本次编译没有生成 PDF':'还没有编译结果'),
+                        h('p',null,compiling?'可以切换页面，编译状态和日志会保留。':compileJob?.error?'请查看编译日志；修正问题后可重新编译。':'保存 LaTeX 源码后点击「编译 PDF」，成功后在此预览。'),
                         !engine?.available && h('a',{href:'https://github.com/tectonic-typesetting/tectonic/releases/tag/tectonic%400.17.0',target:'_blank',rel:'noopener noreferrer'},'获取 Tectonic 0.17.0')
                       )
                 )
@@ -1015,6 +1114,17 @@
         .drw-paper-primary{border:1px solid var(--dsw-alias-label-primary,#222);background:var(--dsw-alias-label-primary,#222);color:var(--dsw-alias-bg-base,#fff);}
         .drw-paper-code{flex:1;width:100%;min-height:180px;resize:none;overflow:auto;border:0;border-radius:0;outline:none;background:var(--dsw-alias-bg-base,#fff);color:var(--dsw-alias-label-primary,#222);padding:17px 18px;font:13px/1.75 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace!important;white-space:pre;tab-size:2;}
         .drw-paper-code:focus-visible{outline:2px solid var(--dsw-focus-ring-color,#6185b4);outline-offset:-2px;}
+        .drw-paper-compile-status{display:flex;flex-direction:column;gap:3px;padding:9px 15px;border-bottom:1px solid var(--dsw-alias-border-l3,#ddd);font-size:12px;flex:none;}
+        .drw-paper-compile-status strong{font-weight:600;}
+        .drw-paper-compile-status span{color:var(--dsw-alias-label-secondary,#666);line-height:1.5;}
+        .drw-paper-compile-status[data-status=failed],.drw-paper-compile-status[data-status=interrupted]{border-left:3px solid #b65040;}
+        .drw-paper-compile-status[data-status=running]{border-left:3px solid #3671c9;}
+        .drw-paper-log-panel{display:flex;flex-direction:column;min-height:100px;max-height:38%;flex:none;overflow:hidden;}
+        .drw-paper-history{display:flex;align-items:center;gap:8px;flex:none;padding:7px 14px;font-size:11px;}
+        .drw-paper-history select{max-width:100%;min-width:0;flex:1;font:inherit;padding:4px;border:1px solid var(--dsw-alias-border-l3,#ddd);border-radius:4px;background:var(--dsw-alias-bg-base,#fff);color:inherit;}
+        .drw-paper-log-panel .drw-paper-log{flex:1;max-height:none;min-height:60px;}
+        .drw-paper-editor-layout.has-compile-log .drw-paper-source{overflow-y:auto;}
+        .drw-paper-editor-layout.has-compile-log .drw-paper-code{min-height:140px;}
         .drw-paper-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;border-top:1px solid var(--dsw-alias-border-l3,#ddd);font-size:11px;color:var(--dsw-alias-label-secondary,#777);}
         .drw-paper-bottom>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
         .drw-paper-link{background:transparent;border:0;color:inherit;text-decoration:underline;white-space:nowrap;font-size:11px;}
@@ -1028,6 +1138,7 @@
         .drw-paper-preview-empty a{font-size:12px;color:var(--dsw-alias-label-primary,#333);text-decoration:underline;}
         .drw-paper-error{padding:10px 24px;border-bottom:1px solid #dbaaa0;background:#fff0eb;color:#a13f30;line-height:1.5;font-size:13px;}
         @media(max-width:1150px){.drw-paper-editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(370px,1fr) minmax(300px,1fr);overflow:auto;}.drw-paper-source{border-right:0;border-bottom:1px solid var(--dsw-alias-border-l3,#ddd);}.drw-paper-preview{min-height:320px;}}
+        @media(max-width:1150px){.drw-paper-editor-layout.has-compile-log{grid-template-rows:minmax(610px,1fr) minmax(320px,1fr);}}
         @media(max-width:700px){.drw-paper-workspace{grid-template-columns:1fr;overflow:auto;}.drw-paper-library{border-right:0;border-bottom:1px solid var(--dsw-alias-border-l3,#ddd);max-height:230px;}.drw-paper-main{min-height:510px;}.drw-paper-header{padding:16px;}}
 
         .drw-page { width:100%; height:100%; overflow-x:hidden; overflow-y:auto; box-sizing:border-box; color:var(--dsw-alias-label-primary,inherit); background:var(--dsw-alias-bg-base,transparent); font-family:inherit; font-size:14px; line-height:1.6; }

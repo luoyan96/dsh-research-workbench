@@ -1,26 +1,24 @@
 # 版本发布说明
 
-## 未发布：文献搜索与本地文献库（2026-11-15）
+## v0.5.0：文献、科研竞赛与 SSH 服务器（2026-11-15）
 
-`feat/literature-library` 在本地竞赛/SSH 开发提交之上增加「文献」入口：arXiv 搜索与分页、持久收藏、后台 PDF 下载与 PDF.js 阅读、单篇/多选/全部收藏 BibTeX 导出。元数据和 PDF 仅保存在当前插件数据目录，不读取用户私人文献。模型工具共用同一个文献库。范围暂不含其他文献库聚合、订阅、评分和 Zotero。
+本版在 v0.4.0 的 Office/WPS 文件工作区、论文编译和插件独立更新之上，统一加入以下三个原生入口：
 
-仍使用开发基线 0.4.0，不能覆盖公开 v0.4.0；新版本发布包必须包含 `lib/literature-assets/`、`lib/literature-xml.js`、XML 依赖 notices 和 `lib/workbench/literature.js`。
+- **文献**：arXiv 关键词、标题、作者和编号搜索，支持排序、分页与 24 小时缓存；本地收藏保留真实元数据与版本，按基础编号去重。宿主后台下载 PDF，内置 PDF.js 支持翻页、缩放、复制文字和离线缓存阅读；单篇/多选/全部收藏导出 BibTeX。模型共用同一套搜索、收藏和引用导出工具。暂不包含跨站聚合、订阅、评分或 Zotero。
+- **科研竞赛**：运行时读取 ML Contests 的国际 AI、数据科学与会议挑战赛，区分报名和提交截止；支持平台、研究方向、关联学术会议和日期范围筛选、搜索及本机收藏。保留数据来源与获取时间，异常日期和离线缓存明确标示，不宣称覆盖所有学科。
+- **SSH 服务器**：参考 Mimir，支持 Linux/POSIX 服务器管理、密码/私钥/Agent、主机指纹核对、GPU 探测、异步命令、持久化退出状态与日志，以及模型服务器工具。AI 提交命令走 DSH 原生 approval；凭据和主机信任在页面管理。超时、断网或停止跟踪不保证远端进程停止，不自动重复提交未知任务。本版不提供通用交互式终端或 SFTP。
 
-本地验证：Windows `npm run check` 为 Node 94 通过 / 1 跳过、上游 Office 34 通过 / 1 跳过，合计 128 通过 / 2 跳过。新增 8 项文献测试覆盖 Atom、编号/版本归一化、引用转义与去重、并发收藏/缓存/离线恢复、后台 PDF 下载和来源限制、HTTP 鉴权/字节范围以及模型工具。打包约 4.48 MB，解包约 9.23 MB / 93 个文件，通过现有更新器的归档校验及官方 CLI 隔离安装，安装后文件哈希与源码构建一致。
+### 验证与安装包
 
-原生 DSH 0.2.1-rc.3 隔离页面使用真实 arXiv 文献验证编号查询、标题/作者组合查询、收藏、切走再返回、跨宿主重启恢复、PDF 实际显示/翻页/缩放、单篇与两篇批量 BibTeX 文件下载。1280×720 与 600×900 检查列表和阅读器，阅读器随宽度适配；稳定页面交互未发现文献模块警告或错误。测试中停止宿主后，旧页面记录了 DSH 自身的会话恢复及请求取消错误，重新加载后功能正常。未替换 AcceptCat 真实 profile，未读取私人文献，也未使用在线模型账号。
+Windows 完整检查为 Node 94 通过 / 1 跳过，上游 Office 34 通过 / 1 跳过，合计 **128 通过 / 2 跳过**。新增 25 项测试覆盖竞赛日期与缓存、SSH 握手/主机信任/任务恢复、Atom 解析、版本归一化、收藏/离线恢复、引用转义、后台 PDF、字节范围、HTTP 鉴权和模型工具。
 
-## 未发布：科研竞赛与 SSH 服务器（2026-11-15）
+DSH 0.2.1-rc.3 隔离环境验证了真实赛事源、中文搜索、收藏刷新恢复、本机合成 SSH 服务的连接/GPU/任务日志，以及真实 arXiv 编号/标题/作者查询、PDF 阅读/翻页/缩放/文字提取和单篇/多篇 BibTeX 下载。覆盖 1280×720、800×900 和 600×900 布局。收藏和 PDF 缓存可跨宿主重启恢复；稳定页面未发现新模块警告或错误。停止测试宿主时，旧页面曾记录 DSH 会话恢复及请求取消错误，重新加载后功能正常。
 
-`feat/competitions-and-ssh` 新增两个原生面板。科研竞赛运行时读取 ML Contests 数据，区分报名与提交截止，缓存保留来源信息。服务器页参考 Mimir 的工作流，使用打包的 ssh2 JavaScript/WebAssembly 传输，支持密码、私钥和 Agent，主机指纹核对、GPU 探测和持久化远程任务日志。AI 的提交工具走原生 DSH approval；凭据与主机信任只在页面管理。停止本机跟踪不等于杀掉远端任务。
+发布包包含打包的 ssh2、PDF.js、XML 解析器及完整依赖许可，无运行时 npm 依赖；Mimir 的 MIT 署名保留。必须包含 lib/ssh-transport.js、lib/ssh-transport.NOTICES.txt、lib/literature-assets/、lib/literature-xml.js、对应 notices 和工作台模块。发布前执行完整检查、更新器归档校验和官方 CLI 隔离安装；GitHub 资产的大小与 SHA-256 必须与本地一致。
 
-本地包仍使用开发基线 0.4.0，不能覆盖公开 v0.4.0。正式发布需分配新版本；tgz 必须包含 lib/ssh-transport.js、lib/ssh-transport.NOTICES.txt、工作台新模块及 Mimir 的 MIT 署名文件。尚未访问用户真实服务器，不把本机 SSH 协议验收当作实验室 GPU 实测。
+未替换 AcceptCat 真实 profile，未读取私人文献或访问实验室真实服务器。真实账号的模型任务质量、远程 GPU 实机与微软 Office 完整兼容矩阵仍需实际材料验收。
 
-本地验证：Windows `npm run check` 合计 120 通过 / 2 跳过；新增 17 项测试覆盖竞赛日期与缓存、SSH 密码及带口令私钥握手、指纹变化、原生工具确认、任务退出码、断线/超时/日志写入失败和跨宿主恢复。打包产物无运行时 npm 依赖，已通过插件自身归档校验和全新隔离 DSH profile 的离线安装。隔离原生页面验证真实竞赛源、中文搜索、收藏刷新恢复，以及本机合成 SSH 服务的连接/GPU/任务日志流程；1280×720、800×900、600×900 下检查布局和交互，无横向溢出及页面警告/错误。模型的实际联网任务与用户真实服务器尚未验收。
-
-当前版本：`dsh-research-workbench@0.4.0`。通过 GitHub tag 或 Release 的 tgz 安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。v0.4.0 包含论文编译持久化、独立更新、原生 Office 融合和本地文件工作区，保留公开 v0.3.3 及其资产。
-
-发布前 Windows `npm run check`：Node 69 通过 / 1 跳过，上游 Office 34 通过 / 1 跳过，合计 103 通过 / 2 跳过。已在隔离 DSH 0.2.1-rc.3 中用真实 WPS 和本地模拟模型验证 DOCX/PPTX 的原生会话、工具执行、保存和预览；DOTX/POTX 副本的原生编辑保存、原件完整性与只读快速失败另有实测。在线模型复杂任务和微软 Office 全套兼容性不在此验收结论内。
+当前版本为 dsh-research-workbench@0.5.0，GitHub 标签 v0.5.0；保留公开 v0.4.0、v0.3.3 及其资产。GitHub Release 与 npm 发布分开执行，npm Registry 尚未发布时不能使用 @latest 安装。
 
 ## v0.4.0：论文编译任务与日志恢复（2026-11-04）
 
@@ -40,16 +38,16 @@
 
 ## 发布到 GitHub
 
-每个版本使用对应的不可覆盖标签及 tgz 资产。v0.4.0 的安装方式：
+每个版本使用对应的不可覆盖标签及 tgz 资产。v0.5.0 的安装方式：
 
 ```powershell
 dsh plugin --profile desktop remove dsh-research-workbench
-dsh plugin --profile desktop add "github:luoyan96/dsh-research-workbench#v0.4.0"
+dsh plugin --profile desktop add "github:luoyan96/dsh-research-workbench#v0.5.0"
 ```
 
 请在 Windows DSH 安装新版本前完全退出客户端。项目数据位于 `~/.dsh/research-workbench`，不在安装包目录下，升级不会删除已有成果。旧版结构化草稿保留原数据和 API，新界面不自动迁移为 Office 文件。
 
-发布顺序：更新 package.json/package-lock 与说明 → 完整检查及打包校验 → PR CI 通过并合并 main → 在合并提交创建 `v0.4.0` → 创建 GitHub Release 并上传 `dsh-research-workbench-0.4.0.tgz` → 确认 GitHub 资产的 SHA-256 digest、大小与本地一致。GitHub Release 与 npm 发布分别执行；仓库当前的 npm Trusted Publisher 仍需包所有者配置，不因 GitHub 发版而触发。
+发布顺序：更新 package.json/package-lock 与说明 → 完整检查及打包校验 → PR CI 通过并合并 main → 在合并提交创建 `v0.5.0` → 创建 GitHub Release 并上传 `dsh-research-workbench-0.5.0.tgz` → 确认 GitHub 资产的 SHA-256 digest、大小与本地一致。GitHub Release 与 npm 发布分别执行；仓库当前的 npm Trusted Publisher 仍需包所有者配置，不因 GitHub 发版而触发。
 
 ## 第一次 npm 发布（仅包所有者操作）
 

@@ -25,7 +25,7 @@ Updates to this snapshot must record a new upstream commit, verify license/prove
 
 The local-file UI bundles icons from @tabler/icons-react 3.50.0 under MIT. Its complete license is packaged in `lib/file-client.NOTICES.txt`. The UI reuses DSH's React and native Conversation Factory; no React runtime is bundled.
 
-## Compute servers and competition calendar (unreleased)
+## Compute servers and competition calendar (v0.5.0)
 
 The Servers workflow follows [Mimir](https://github.com/1692775560/dsh-Mimir-Academic-research) at commit `9741d7da347c83e7cdd2b0397650f14501fdd155`: remembered servers, SSH/GPU probes, asynchronous jobs, persisted outcomes, and model-facing list/check/submit/list-jobs operations. Mimir is Copyright (c) 2026 1692775560, MIT; its license is retained in `vendor/mimir-server/LICENSE`. Reference modules are `packages/mimir/src/services/server.ts` and `packages/mimir/src/tools/server.ts`. This plugin implements its own transport, persistence and native pages; it does not include Mimir's wiki domain, full plugin or copied workbench UI.
 
@@ -33,7 +33,7 @@ The Node SSH transport bundles ssh2 1.17.0 and the JavaScript dependencies actua
 
 The competition calendar reads [ML Contests](https://github.com/mlcontests/mlcontests.github.io) data at runtime. That upstream repository declares GPL-3.0. The shipped plugin contains no upstream competition dataset or GPL program code; locally cached data retains its source and attribution. Dates and external links are community-provided data, not instructions or independently verified organizer notices.
 
-## Literature library (unreleased)
+## Literature library (v0.5.0)
 
 The arXiv search → library → PDF → BibTeX workflow references Mimir at the same pinned commit above, particularly `src/tools/arxiv.ts`, `src/services/library.ts`, `src/arxiv-id.ts` and `src/bibtex.ts`. These modules were inspected as references; the strict identifier normalization, bounded Atom parser, local library, citation serializer and native UI here are implemented independently. Mimir's MIT attribution remains in `vendor/mimir-server/LICENSE`.
 

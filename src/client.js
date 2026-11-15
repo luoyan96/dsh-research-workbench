@@ -1,5 +1,5 @@
 /*
- * DSH Research Workbench v0.4.0 — native sidebar and local file workspaces.
+ * DSH Research Workbench v0.5.0 — native sidebar and local file workspaces.
  * This file is a prebuilt browser module: the exact DSH __ModuleLoader__ ABI
  * used by current client bundles. No DOM scraping or React duplication.
  */

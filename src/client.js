@@ -14,6 +14,8 @@
       /* NATIVE_OFFICE_CLIENT */
       let fileClient = null;
       /* FILE_WORKSPACE_CLIENT */
+      let researchClient = null;
+      /* RESEARCH_EXTENSION_CLIENT */
 
       const PANELS = Object.freeze([
         { id:'research-proposals', kind:'proposal', order:20, title:'项目书', icon:'filetext', subtitle:'科技项目申报、可行性报告与中试平台建设' },
@@ -21,6 +23,8 @@
         { id:'research-papers', kind:'paper', order:40, title:'论文管理', icon:'book', subtitle:'本地 LaTeX 项目编辑与 Tectonic 编译' },
         { id:'research-ip', kind:'ip', order:50, title:'专利与软著', icon:'shield', subtitle:'专利技术交底和软件著作权申请材料' },
         { id:'research-ccf', kind:'deadlines', order:60, title:'CCF 截稿', icon:'calendar', subtitle:'CCF A/B/C 会议投稿时间、分类与收藏' },
+        { id:'research-competitions', kind:'competitions', order:70, title:'科研竞赛', icon:'calendar', subtitle:'国际 AI、数据科学与学术挑战赛' },
+        { id:'research-servers', kind:'servers', order:80, title:'服务器', icon:'flask', subtitle:'SSH 连接、GPU 检测与远程实验任务' },
       ]);
 
       const SHAPES = Object.freeze({
@@ -1364,7 +1368,7 @@
         ctx.effect(() => {
           const style = document.createElement('style');
           style.setAttribute('data-dsh-research-workbench', 'true');
-          style.textContent = CSS + UPDATE_CSS + fileClient.css;
+          style.textContent = CSS + UPDATE_CSS + fileClient.css + researchClient.css;
           document.head.appendChild(style);
           return () => { style.remove(); };
         }, 'research-workbench: styles');
@@ -1380,11 +1384,12 @@
               ...(filePanel ? { children: { [conversationKey]: { kind: 'single', scope: 'session' } } } : {}),
               inject: () => ({
                 panel,
-                ...(filePanel ? { runtime: fileRuntime, conversationKey, useUpdateGuard } : {}),
+                useUpdateGuard,
+                ...(filePanel ? { runtime: fileRuntime, conversationKey } : {}),
                 onReturnChat: () => { ctx.layout.selectPanel(null); },
                 onOpenPanel: (id) => { ctx.layout.selectPanel(id); },
               }),
-            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : fileClient.FileWorkspace);
+            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : panel.kind === 'competitions' ? researchClient.CompetitionPage : panel.kind === 'servers' ? researchClient.ServersPage : fileClient.FileWorkspace);
             if (filePanel) ctx.slots.inject(conversationKey, () => ctx.slots.register({ name: conversationKey, inject: () => ({ useUpdateGuard }) }, fileClient.BoundConversation));
           }
         });
@@ -1399,6 +1404,8 @@
               label: panel.title,
               order: panel.order,
             }, function ResearchSidebarIcon(props) {
+              if (panel.kind === 'competitions') return h(researchClient.CompetitionIcon, { size: props.size || 18 });
+              if (panel.kind === 'servers') return h(researchClient.ServerIcon, { size: props.size || 18 });
               return h(PanelIcon, { icon: panel.icon, size: props.size });
             });
           }

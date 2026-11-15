@@ -90,7 +90,7 @@ export function adaptOfficeHelper(source) {
   return '// Integrated from @copylee/dsh-office 1.2.0 (MIT); see vendor/copylee-office/LICENSE and NOTICE.md.\n' + source.replaceAll('"dsh-office"', '"research-workbench-office"');
 }
 
-async function bundledLicenses(metafile) {
+export async function bundledLicenses(metafile) {
   const packages = new Map();
   for (const input of Object.keys(metafile.inputs)) {
     if (!input.includes('node_modules/')) continue;

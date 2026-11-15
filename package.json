@@ -52,8 +52,11 @@
     "lib/native-office.js",
     "lib/native-office.NOTICES.txt",
     "lib/file-client.NOTICES.txt",
+    "lib/ssh-transport.js",
+    "lib/ssh-transport.NOTICES.txt",
     "helper/OfficeHelper.cs",
     "vendor/copylee-office",
+    "vendor/mimir-server/LICENSE",
     "NOTICE.md",
     "cordis.patch.yml",
     "README.md"
@@ -89,6 +92,7 @@
     "@deepseek-ai/schemastery": "3.18.4",
     "@tabler/icons-react": "3.50.0",
     "esbuild": "0.28.2",
+    "ssh2": "1.17.0",
     "temml": "0.13.5",
     "vitest": "4.1.12"
   }

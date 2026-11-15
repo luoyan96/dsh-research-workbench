@@ -136,7 +136,10 @@ test('Tectonic compilation uses approved binary and produces a retrievable PDF',
   assert.match((await service.pdf(p.id)).toString(), /%PDF-1.4/);
 });
 
-test('Cordis host plugin registers and disposes research API prefixes', async () => {
+test('Cordis host plugin registers and disposes research API prefixes', async t => {
+  const previousRoot=process.env.DSH_RWB_DATA_DIR, isolatedRoot=await mkdtemp(join(tmpdir(),'rwb-host-'));
+  process.env.DSH_RWB_DATA_DIR=isolatedRoot;
+  t.after(async()=>{if(previousRoot===undefined)delete process.env.DSH_RWB_DATA_DIR;else process.env.DSH_RWB_DATA_DIR=previousRoot;await rm(isolatedRoot,{recursive:true,force:true});});
   const host = await import('../src/index.js');
   assert.deepEqual(host.inject, ['webServer', 'connection']);
   const registrations = [];
@@ -150,14 +153,17 @@ test('Cordis host plugin registers and disposes research API prefixes', async ()
     effect(factory) { effectDisposers.push(factory()); },
   };
   host.apply(ctx);
-  assert.equal(registrations.length, 4);
-  assert.deepEqual(registrations.map(r=>r.path), ['/research-workbench/files','/research-workbench/api','/research-workbench/content','/research-workbench/deadlines']);
+  assert.equal(registrations.length, 6);
+  assert.deepEqual(registrations.map(r=>r.path), ['/research-workbench/competitions','/research-workbench/servers','/research-workbench/files','/research-workbench/api','/research-workbench/content','/research-workbench/deadlines']);
   for (const r of registrations) { assert.equal(r.kind, 'prefix'); assert.equal(typeof r.handler,'function'); }
-  for (const dispose of effectDisposers) dispose();
+  for (const dispose of effectDisposers) await dispose();
   assert.equal(registrations.length, 0);
 });
 
-test('Cordis host activates model-facing tools only if tools service exists', async () => {
+test('Cordis host activates model-facing tools only if tools service exists', async t => {
+  const previousRoot=process.env.DSH_RWB_DATA_DIR, isolatedRoot=await mkdtemp(join(tmpdir(),'rwb-host-'));
+  process.env.DSH_RWB_DATA_DIR=isolatedRoot;
+  t.after(async()=>{if(previousRoot===undefined)delete process.env.DSH_RWB_DATA_DIR;else process.env.DSH_RWB_DATA_DIR=previousRoot;await rm(isolatedRoot,{recursive:true,force:true});});
   const host=await import('../src/index.js');
   const registrations=[];
   const disposers=[];
@@ -170,9 +176,9 @@ test('Cordis host activates model-facing tools only if tools service exists', as
     inject(names,cb){if(names[0]==='tools')cb(this);},
   };
   host.apply(ctx);
-  assert.equal(registrations.length,4);
-  assert.equal(specs.length,8);
+  assert.equal(registrations.length,6);
+  assert.equal(specs.length,13);
   assert.ok(specs.every(s=>s.parameters.type==='object'&&s.output.schema.type==='string'));
-  for (const dispose of disposers.reverse()) dispose();
+  for (const dispose of disposers.reverse()) await dispose();
   assert.equal(specs.length,0);
 });

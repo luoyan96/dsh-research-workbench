@@ -1,5 +1,13 @@
 # 版本发布说明
 
+## 未发布：科研竞赛与 SSH 服务器（2026-11-15）
+
+`feat/competitions-and-ssh` 新增两个原生面板。科研竞赛运行时读取 ML Contests 数据，区分报名与提交截止，缓存保留来源信息。服务器页参考 Mimir 的工作流，使用打包的 ssh2 JavaScript/WebAssembly 传输，支持密码、私钥和 Agent，主机指纹核对、GPU 探测和持久化远程任务日志。AI 的提交工具走原生 DSH approval；凭据与主机信任只在页面管理。停止本机跟踪不等于杀掉远端任务。
+
+本地包仍使用开发基线 0.4.0，不能覆盖公开 v0.4.0。正式发布需分配新版本；tgz 必须包含 lib/ssh-transport.js、lib/ssh-transport.NOTICES.txt、工作台新模块及 Mimir 的 MIT 署名文件。尚未访问用户真实服务器，不把本机 SSH 协议验收当作实验室 GPU 实测。
+
+本地验证：Windows `npm run check` 合计 120 通过 / 2 跳过；新增 17 项测试覆盖竞赛日期与缓存、SSH 密码及带口令私钥握手、指纹变化、原生工具确认、任务退出码、断线/超时/日志写入失败和跨宿主恢复。打包产物无运行时 npm 依赖，已通过插件自身归档校验和全新隔离 DSH profile 的离线安装。隔离原生页面验证真实竞赛源、中文搜索、收藏刷新恢复，以及本机合成 SSH 服务的连接/GPU/任务日志流程；1280×720、800×900、600×900 下检查布局和交互，无横向溢出及页面警告/错误。模型的实际联网任务与用户真实服务器尚未验收。
+
 当前版本：`dsh-research-workbench@0.4.0`。通过 GitHub tag 或 Release 的 tgz 安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。v0.4.0 包含论文编译持久化、独立更新、原生 Office 融合和本地文件工作区，保留公开 v0.3.3 及其资产。
 
 发布前 Windows `npm run check`：Node 69 通过 / 1 跳过，上游 Office 34 通过 / 1 跳过，合计 103 通过 / 2 跳过。已在隔离 DSH 0.2.1-rc.3 中用真实 WPS 和本地模拟模型验证 DOCX/PPTX 的原生会话、工具执行、保存和预览；DOTX/POTX 副本的原生编辑保存、原件完整性与只读快速失败另有实测。在线模型复杂任务和微软 Office 全套兼容性不在此验收结论内。

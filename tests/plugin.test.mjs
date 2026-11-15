@@ -111,14 +111,14 @@ test('manifest declares a DSH self-activating client bundle', async () => {
 });
 
 test('checked-in client artifacts are exactly regenerated from their source', async () => {
-  const client = (await read('lib/client.js')).replace(/\/\* NATIVE_OFFICE_BEGIN \*\/[\s\S]*?\/\* NATIVE_OFFICE_END \*\//, '/* NATIVE_OFFICE_CLIENT */').replace(/\/\* FILE_WORKSPACE_BEGIN \*\/[\s\S]*?\/\* FILE_WORKSPACE_END \*\//, '/* FILE_WORKSPACE_CLIENT */');
+  const client = (await read('lib/client.js')).replace(/\/\* NATIVE_OFFICE_BEGIN \*\/[\s\S]*?\/\* NATIVE_OFFICE_END \*\//, '/* NATIVE_OFFICE_CLIENT */').replace(/\/\* FILE_WORKSPACE_BEGIN \*\/[\s\S]*?\/\* FILE_WORKSPACE_END \*\//, '/* FILE_WORKSPACE_CLIENT */').replace(/\/\* RESEARCH_EXTENSION_BEGIN \*\/[\s\S]*?\/\* RESEARCH_EXTENSION_END \*\//, '/* RESEARCH_EXTENSION_CLIENT */');
   assert.equal(client, await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
-  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','files']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
+  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','files','competitions','servers','server-tools','ssh-credentials','service-utils']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
-test('browser module registers five native DSH main pages and sidebar rows in order', async () => {
+test('browser module registers seven native DSH main pages and sidebar rows in order', async () => {
   const { id, module } = loadBrowserModule(await read('lib/client.js'));
   assert.equal(id, 'dsh-research-workbench');
   assert.deepEqual(Array.from(module.inject), ['slots', 'layout', 'remote', 'remote.settings', 'sessions']);
@@ -140,10 +140,10 @@ test('browser module registers five native DSH main pages and sidebar rows in or
   plugin.apply(host.ctx);
   const main = host.registrations.filter(x => x.options.name === 'main');
   const sidebar = host.registrations.filter(x => x.options.name === 'sidebar.panellist');
-  assert.equal(main.length, 5);
-  assert.equal(sidebar.length, 5);
+  assert.equal(main.length, 7);
+  assert.equal(sidebar.length, 7);
   assert.deepEqual(main.map(x => x.options.key), [
-    'research-proposals', 'research-slides', 'research-papers', 'research-ip', 'research-ccf',
+    'research-proposals', 'research-slides', 'research-papers', 'research-ip', 'research-ccf', 'research-competitions', 'research-servers',
   ]);
   assert.deepEqual(sidebar.map(x => [x.options.id, x.options.label, x.options.order]), [
     ['research-proposals', '项目书', 20],
@@ -151,6 +151,8 @@ test('browser module registers five native DSH main pages and sidebar rows in or
     ['research-papers', '论文管理', 40],
     ['research-ip', '专利与软著', 50],
     ['research-ccf', 'CCF 截稿', 60],
+    ['research-competitions', '科研竞赛', 70],
+    ['research-servers', '服务器', 80],
   ]);
   assert.equal(host.elementStyles.length, 1);
   const updates = host.registrations.find(x => x.options.name === 'plugins.detail.section');

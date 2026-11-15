@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { IconTrophy, IconServer, IconRefresh, IconPlus, IconStar, IconExternalLink, IconTerminal2, IconShieldCheck } from '@tabler/icons-react';
-import css from './research-client.css';
+import baseCss from './research-client.css';
+import { literatureCss } from './literature-client.jsx';
+export { LiteraturePage, LiteratureIcon } from './literature-client.jsx';
+const css = baseCss + literatureCss;
 export { css, IconTrophy as CompetitionIcon, IconServer as ServerIcon };
 
 async function api(base, route = '', body) {

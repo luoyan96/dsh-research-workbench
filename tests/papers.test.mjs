@@ -153,8 +153,8 @@ test('Cordis host plugin registers and disposes research API prefixes', async t 
     effect(factory) { effectDisposers.push(factory()); },
   };
   host.apply(ctx);
-  assert.equal(registrations.length, 6);
-  assert.deepEqual(registrations.map(r=>r.path), ['/research-workbench/competitions','/research-workbench/servers','/research-workbench/files','/research-workbench/api','/research-workbench/content','/research-workbench/deadlines']);
+  assert.equal(registrations.length, 7);
+  assert.deepEqual(registrations.map(r=>r.path), ['/research-workbench/literature','/research-workbench/competitions','/research-workbench/servers','/research-workbench/files','/research-workbench/api','/research-workbench/content','/research-workbench/deadlines']);
   for (const r of registrations) { assert.equal(r.kind, 'prefix'); assert.equal(typeof r.handler,'function'); }
   for (const dispose of effectDisposers) await dispose();
   assert.equal(registrations.length, 0);
@@ -176,8 +176,8 @@ test('Cordis host activates model-facing tools only if tools service exists', as
     inject(names,cb){if(names[0]==='tools')cb(this);},
   };
   host.apply(ctx);
-  assert.equal(registrations.length,6);
-  assert.equal(specs.length,13);
+  assert.equal(registrations.length,7);
+  assert.equal(specs.length,16);
   assert.ok(specs.every(s=>s.parameters.type==='object'&&s.output.schema.type==='string'));
   for (const dispose of disposers.reverse()) await dispose();
   assert.equal(specs.length,0);

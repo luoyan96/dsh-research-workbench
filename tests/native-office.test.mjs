@@ -70,7 +70,11 @@ test('settings and host status use the research namespace without DOM navigation
   const client = await read('lib/client.js');
   assert.match(client, /Office \/ WPS/);
   assert.match(client, /\/api\/research-workbench\/office\/status/);
-  assert.doesNotMatch(client, /\/api\/dsh-office\/status|MutationObserver|querySelectorAll/);
+  assert.doesNotMatch(client, /\/api\/dsh-office\/status|MutationObserver/);
+  // The literature reader confines its focus trap to its own modal. Native
+  // Office must still never find or rewrite host navigation via selectors.
+  const officeClient = client.match(/\/\* NATIVE_OFFICE_BEGIN \*\/([\s\S]*?)\/\* NATIVE_OFFICE_END \*\//)[1];
+  assert.doesNotMatch(officeClient, /querySelectorAll/);
   const manifest = JSON.parse(await read('package.json'));
   assert.equal(manifest.exports['./native-office'], './lib/native-office.js');
   assert.match(await read('cordis.patch.yml'), /id: research-native-office/);

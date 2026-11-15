@@ -59,7 +59,10 @@
     "vendor/mimir-server/LICENSE",
     "NOTICE.md",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "lib/literature-xml.js",
+    "lib/literature-xml.NOTICES.txt",
+    "lib/literature-assets"
   ],
   "license": "UNLICENSED",
   "keywords": [
@@ -92,6 +95,8 @@
     "@deepseek-ai/schemastery": "3.18.4",
     "@tabler/icons-react": "3.50.0",
     "esbuild": "0.28.2",
+    "fast-xml-parser": "5.12.1",
+    "pdfjs-dist": "5.4.296",
     "ssh2": "1.17.0",
     "temml": "0.13.5",
     "vitest": "4.1.12"

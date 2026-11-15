@@ -13,6 +13,17 @@ await mkdir(resolve(root, 'lib/workbench'), { recursive: true });
 const files=['index.js','client.js','papers.js','workbench/content.js','workbench/office.js','workbench/office-import.js','workbench/tools.js','workbench/deadlines.js','workbench/updates.js','workbench/update-archive.js','workbench/native-office-activity.js','workbench/files.js','workbench/service-utils.js','workbench/competitions.js','workbench/servers.js','workbench/server-tools.js','workbench/ssh-credentials.js'];
 await Promise.all(files.map(file=>copyFile(resolve(root, 'src',file),resolve(root,'lib',file))));
 const nativeOffice = await buildNativeOffice();
+await copyFile(resolve(root,'src/workbench/literature.js'),resolve(root,'lib/workbench/literature.js'));
+const xml = await build({ absWorkingDir: root, entryPoints:['src/literature-xml.js'], outfile:'lib/literature-xml.js', bundle:true, format:'esm', platform:'node', target:'es2022', metafile:true, legalComments:'eof', logLevel:'warning' });
+await writeFile(resolve(root,'lib/literature-xml.NOTICES.txt'),await bundledLicenses(xml.metafile));
+await mkdir(resolve(root,'lib/literature-assets'),{recursive:true});
+for (const name of ['pdf.min.mjs','pdf.worker.min.mjs']) await copyFile(resolve(root,'node_modules/pdfjs-dist/build',name),resolve(root,'lib/literature-assets',name));
+const { readdir } = await import('node:fs/promises');
+for (const directory of ['standard_fonts','wasm']) {
+  await mkdir(resolve(root,'lib/literature-assets',directory),{recursive:true});
+  for (const name of await readdir(resolve(root,'node_modules/pdfjs-dist',directory))) await copyFile(resolve(root,'node_modules/pdfjs-dist',directory,name),resolve(root,'lib/literature-assets',directory,name));
+}
+await copyFile(resolve(root,'node_modules/pdfjs-dist/LICENSE'),resolve(root,'lib/literature-assets/LICENSE'));
 const fileClient = await build({ absWorkingDir: root, entryPoints: ['src/file-client.jsx'], bundle: true, format: 'cjs', platform: 'browser', target: 'es2022', external: ['react'], loader: { '.css': 'text' }, write: false, legalComments: 'eof', logLevel: 'warning', define: { 'process.env.NODE_ENV': '"production"' } });
 const fileFactory = `/* FILE_WORKSPACE_BEGIN */\nfileClient = (function(require) { var module = { exports: {} }; var exports = module.exports;\n${fileClient.outputFiles[0].text}\nreturn module.exports; })(require);\n/* FILE_WORKSPACE_END */`;
 const extension = await build({ absWorkingDir: root, entryPoints: ['src/research-client.jsx'], bundle: true, format: 'cjs', platform: 'browser', target: 'es2022', external: ['react'], loader: { '.css': 'text' }, write: false, legalComments: 'eof', logLevel: 'warning', define: { 'process.env.NODE_ENV': '"production"' } });

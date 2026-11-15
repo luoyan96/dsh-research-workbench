@@ -115,10 +115,10 @@ test('checked-in client artifacts are exactly regenerated from their source', as
   assert.equal(client, await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
-  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','files','competitions','servers','server-tools','ssh-credentials','service-utils']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
+  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','files','competitions','servers','server-tools','ssh-credentials','service-utils','literature']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
-test('browser module registers seven native DSH main pages and sidebar rows in order', async () => {
+test('browser module registers eight native DSH main pages and sidebar rows in order', async () => {
   const { id, module } = loadBrowserModule(await read('lib/client.js'));
   assert.equal(id, 'dsh-research-workbench');
   assert.deepEqual(Array.from(module.inject), ['slots', 'layout', 'remote', 'remote.settings', 'sessions']);
@@ -140,15 +140,16 @@ test('browser module registers seven native DSH main pages and sidebar rows in o
   plugin.apply(host.ctx);
   const main = host.registrations.filter(x => x.options.name === 'main');
   const sidebar = host.registrations.filter(x => x.options.name === 'sidebar.panellist');
-  assert.equal(main.length, 7);
-  assert.equal(sidebar.length, 7);
+  assert.equal(main.length, 8);
+  assert.equal(sidebar.length, 8);
   assert.deepEqual(main.map(x => x.options.key), [
-    'research-proposals', 'research-slides', 'research-papers', 'research-ip', 'research-ccf', 'research-competitions', 'research-servers',
+    'research-proposals', 'research-slides', 'research-papers', 'research-literature', 'research-ip', 'research-ccf', 'research-competitions', 'research-servers',
   ]);
   assert.deepEqual(sidebar.map(x => [x.options.id, x.options.label, x.options.order]), [
     ['research-proposals', '项目书', 20],
     ['research-slides', 'PPT 工作台', 30],
     ['research-papers', '论文管理', 40],
+    ['research-literature', '文献', 45],
     ['research-ip', '专利与软著', 50],
     ['research-ccf', 'CCF 截稿', 60],
     ['research-competitions', '科研竞赛', 70],
@@ -187,7 +188,10 @@ test('browser module registers seven native DSH main pages and sidebar rows in o
   assert.equal(host.selected.at(-1), null);
   const slidePage = main[1].Component(main[1].options.inject());
   assert.match(textOf(slidePage), /PPT 工作台/);
-  const ipPage = main[3].Component(main[3].options.inject());
+  const ip = main.find(x => x.options.key === 'research-ip');
+  const ipPage = ip.Component(ip.options.inject());
+  const literature = main.find(x => x.options.key === 'research-literature');
+  assert.match(textOf(literature.Component(literature.options.inject())), /文献.*arXiv/s);
   assert.match(textOf(ipPage), /专利与软著/);
 
   // The component cannot silently replace the existing DSH brand or chat panel.

@@ -21,6 +21,7 @@
         { id:'research-proposals', kind:'proposal', order:20, title:'项目书', icon:'filetext', subtitle:'科技项目申报、可行性报告与中试平台建设' },
         { id:'research-slides', kind:'slides', order:30, title:'PPT 工作台', icon:'presentation', subtitle:'科研组会、项目汇报和答辩演示文稿' },
         { id:'research-papers', kind:'paper', order:40, title:'论文管理', icon:'book', subtitle:'本地 LaTeX 项目编辑与 Tectonic 编译' },
+        { id:'research-literature', kind:'literature', order:45, title:'文献', icon:'book', subtitle:'arXiv 搜索、收藏、PDF 阅读和 BibTeX 导出' },
         { id:'research-ip', kind:'ip', order:50, title:'专利与软著', icon:'shield', subtitle:'专利技术交底和软件著作权申请材料' },
         { id:'research-ccf', kind:'deadlines', order:60, title:'CCF 截稿', icon:'calendar', subtitle:'CCF A/B/C 会议投稿时间、分类与收藏' },
         { id:'research-competitions', kind:'competitions', order:70, title:'科研竞赛', icon:'calendar', subtitle:'国际 AI、数据科学与学术挑战赛' },
@@ -1389,7 +1390,7 @@
                 onReturnChat: () => { ctx.layout.selectPanel(null); },
                 onOpenPanel: (id) => { ctx.layout.selectPanel(id); },
               }),
-            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : panel.kind === 'competitions' ? researchClient.CompetitionPage : panel.kind === 'servers' ? researchClient.ServersPage : fileClient.FileWorkspace);
+            }, panel.id === 'research-papers' ? PaperPage : panel.id === 'research-ccf' ? DeadlinePage : panel.kind === 'literature' ? researchClient.LiteraturePage : panel.kind === 'competitions' ? researchClient.CompetitionPage : panel.kind === 'servers' ? researchClient.ServersPage : fileClient.FileWorkspace);
             if (filePanel) ctx.slots.inject(conversationKey, () => ctx.slots.register({ name: conversationKey, inject: () => ({ useUpdateGuard }) }, fileClient.BoundConversation));
           }
         });
@@ -1406,6 +1407,7 @@
             }, function ResearchSidebarIcon(props) {
               if (panel.kind === 'competitions') return h(researchClient.CompetitionIcon, { size: props.size || 18 });
               if (panel.kind === 'servers') return h(researchClient.ServerIcon, { size: props.size || 18 });
+              if (panel.kind === 'literature') return h(researchClient.LiteratureIcon, { size: props.size || 18 });
               return h(PanelIcon, { icon: panel.icon, size: props.size });
             });
           }

@@ -104,6 +104,7 @@ export async function bundledLicenses(metafile) {
           const notices = files.filter(name => /^(?:licen[cs]e|copying|notice)(?:$|[.-])/i.test(name));
           const texts = await Promise.all(notices.map(async name => `${name}\n${await readFile(path.join(directory, name), 'utf8')}`));
           if (!texts.length && pkg.name.startsWith('@deepseek-ai/dsh-') && pkg.license === 'MIT') texts.push(await readFile(path.join(root, 'vendor/licenses/deepseek-harness-MIT.txt'), 'utf8'));
+          if (!texts.length && pkg.name === '@nodable/entities' && pkg.version === '3.1.0') texts.push(await readFile(path.join(root, 'vendor/licenses/nodable-MIT.txt'), 'utf8'));
           if (!texts.length) throw Error('Missing bundled license text: ' + key);
           packages.set(key, `${key}\nDeclared license: ${pkg.license || 'see upstream'}\n${texts.join('\n\n')}`);
         }

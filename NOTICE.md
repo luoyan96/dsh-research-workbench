@@ -32,3 +32,11 @@ The Servers workflow follows [Mimir](https://github.com/1692775560/dsh-Mimir-Aca
 The Node SSH transport bundles ssh2 1.17.0 and the JavaScript dependencies actually used by the build. Complete dependency license texts are generated in `lib/ssh-transport.NOTICES.txt`. Optional native crypto/cpu extensions are not required; the JavaScript/WebAssembly fallback is included.
 
 The competition calendar reads [ML Contests](https://github.com/mlcontests/mlcontests.github.io) data at runtime. That upstream repository declares GPL-3.0. The shipped plugin contains no upstream competition dataset or GPL program code; locally cached data retains its source and attribution. Dates and external links are community-provided data, not instructions or independently verified organizer notices.
+
+## Literature library (unreleased)
+
+The arXiv search → library → PDF → BibTeX workflow references Mimir at the same pinned commit above, particularly `src/tools/arxiv.ts`, `src/services/library.ts`, `src/arxiv-id.ts` and `src/bibtex.ts`. These modules were inspected as references; the strict identifier normalization, bounded Atom parser, local library, citation serializer and native UI here are implemented independently. Mimir's MIT attribution remains in `vendor/mimir-server/LICENSE`.
+
+The PDF reader packages Mozilla PDF.js / pdfjs-dist 5.4.296 (Apache-2.0), with its original `LICENSE`, standard-font notices and WebAssembly notices under `lib/literature-assets/`. It uses the core canvas API without PDF scripting or HTML annotation execution. No paper PDFs are distributed with the plugin; they are obtained from arXiv only when requested.
+
+The Atom parser bundles fast-xml-parser 5.12.1 and its used dependencies under their declared licenses. Complete license texts are generated in `lib/literature-xml.NOTICES.txt`. The npm distribution of @nodable/entities 3.1.0 omits its license file; its MIT text is preserved with a pinned official upstream source in `vendor/licenses/nodable-MIT.txt` and included in generated notices.

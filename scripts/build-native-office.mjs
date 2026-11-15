@@ -90,7 +90,7 @@ export function adaptOfficeHelper(source) {
   return '// Integrated from @copylee/dsh-office 1.2.0 (MIT); see vendor/copylee-office/LICENSE and NOTICE.md.\n' + source.replaceAll('"dsh-office"', '"research-workbench-office"');
 }
 
-async function bundledLicenses(metafile) {
+export async function bundledLicenses(metafile) {
   const packages = new Map();
   for (const input of Object.keys(metafile.inputs)) {
     if (!input.includes('node_modules/')) continue;
@@ -104,6 +104,7 @@ async function bundledLicenses(metafile) {
           const notices = files.filter(name => /^(?:licen[cs]e|copying|notice)(?:$|[.-])/i.test(name));
           const texts = await Promise.all(notices.map(async name => `${name}\n${await readFile(path.join(directory, name), 'utf8')}`));
           if (!texts.length && pkg.name.startsWith('@deepseek-ai/dsh-') && pkg.license === 'MIT') texts.push(await readFile(path.join(root, 'vendor/licenses/deepseek-harness-MIT.txt'), 'utf8'));
+          if (!texts.length && pkg.name === '@nodable/entities' && pkg.version === '3.1.0') texts.push(await readFile(path.join(root, 'vendor/licenses/nodable-MIT.txt'), 'utf8'));
           if (!texts.length) throw Error('Missing bundled license text: ' + key);
           packages.set(key, `${key}\nDeclared license: ${pkg.license || 'see upstream'}\n${texts.join('\n\n')}`);
         }

@@ -1,8 +1,25 @@
 # DSH Research Workbench · 科研成果工作台
 
-将 **项目书、PPT、论文、专利与软著、CCF 截稿日历** 五个原生工作台直接加入 DeepSeek Harness（DSH）左侧导航。插件采用 Cordis + Slots，使用 DSH 现有会话和工作区，不 Fork DSH、不替换品牌和主聊天界面。
+将 **项目书、PPT、论文、文献、专利与软著、CCF 截稿、科研竞赛和 SSH 服务器** 直接加入 DeepSeek Harness（DSH）左侧导航。插件采用 Cordis + Slots，使用 DSH 现有会话和工作区，不 Fork DSH、不替换品牌和主聊天界面。
 
 **v0.4.0** 将项目书、PPT、专利与软著改为「上传自己的文件或模板 → 实际页面预览 + AI 对话 → 保存下载」，内置 WPS / Office 协作、插件独立更新，并修复论文切换页面后编译状态和日志丢失。原件保留，AI 修改工作副本；模板库和实验室共享文件暂不提供。要求 DSH 0.2.1-rc.3 或兼容新版；本地 Office 文件流程需要 Windows 与可用的 WPS / Office。
+
+## v0.5.0：文献、科研竞赛与 SSH 服务器（2026-11-15）
+
+- **文献**：参考 Mimir 的文献工作流，支持 arXiv 关键词/标题/作者/编号查询、相关性/提交日期/更新日期排序和分页；每页 20 条，搜索结果缓存 24 小时，API 请求间隔至少 3.1 秒。收藏按 arXiv 基础编号去重，保留收藏时的版本和真实元数据，重启后可恢复；可筛选、取消收藏。
+- **PDF 阅读**：点击阅读后由宿主后台下载，切换页面不会取消；在内置 PDF.js 阅读器逐页阅读、缩放、复制提取文字或下载 PDF。首次需联网，已缓存 PDF 可离线打开，单篇上限 50 MiB，同时最多下载两篇。宿主退出会中止尚未完成的下载，回来可重试。只获取已搜索文献对应的 arXiv PDF，不代理任意网址。
+- **BibTeX**：单篇、本页多选、全部收藏导出 UTF-8 `references.bib`。条目使用真实 arXiv 编号、版本、作者、年份和来源；DOI 仅在源站提供时输出，不推断期刊。当前不含跨站联合搜索、订阅、Zotero 同步或 AI 论文评分。
+- 模型可使用 `research_literature_search/library/bibtex` 搜索、收藏和读取引用；无需新增 API Key。UI 与模型共用本地文献库，目录为数据根目录的 `literature/library.json` 和 `literature/pdf/`。PDF 资源随插件打包，不从 CDN 加载阅读器代码。
+
+- **科研竞赛**：从 ML Contests 的公开 JSON 读取国际 AI、数据科学及会议挑战赛，区分报名截止与作品提交截止；可按平台、方向、关联学术会议、未来 30/90/365 天筛选、搜索与本机收藏。显示源文件提交时间和本机获取时间；只有日期的记录不生成精确时刻，异常日期显示待核对。源站失败时明确显示上次缓存，不把缓存当作新数据。此版不接入已停止更新的其他聚合源，也不宣称覆盖所有学科竞赛。
+- **服务器**：参考 Mimir 的 Servers 工作流，管理 Linux/POSIX SSH 主机、端口、用户名、远程工作目录和认证方式（SSH Agent、本机私钥、SSH 密码）。首次连接只读取主机指纹；用户向管理员核对并确认后才发送认证信息，指纹变化时拒绝认证。支持 GPU 型号、利用率与显存探测；没有 NVIDIA GPU 不等于 SSH 连接失败。
+- 密码/私钥口令只在本机保护保存；Windows 使用当前用户 DPAPI，其他系统使用本机 0600 密钥的 AES-GCM。服务器列表和模型工具不返回保存的密码或私钥内容，模型不能添加凭据或信任主机。修改连接时，密码和口令输入留空保留原值；变更认证方式会清除不再使用的秘密。
+- **远程任务**：页面可提交命令，也注册 `research_server_list/check/submit_job/list_jobs/read_log` 供 AI 使用；模型提交命令必须经过原生 DSH approval，缺少 approval 通道会拒绝执行。页面中的提交按钮直接执行用户填写的命令。任务运行权限等于 SSH 账户权限，不提供新的操作系统沙箱。
+- 命令在已保存的远程工作目录运行；返回任务 ID 后由宿主后台跟踪。任务状态、退出码、stdout/stderr 落盘；页面切换后可恢复。默认最多跟踪 30 分钟，可选 1～1440 分钟；日志捕获上限 4 MiB，页面展示尾部。只有实际退出码 0 才报告完成。
+- 超时、断网、退出宿主、停止本机跟踪均不保证远端进程停止；结果标为未确认，避免自动重复提交。服务不会杀掉未验证的远端 PID。用户需要结束训练时应通过明确的服务器命令或作业调度器核对和停止。另一个存活宿主的任务不会在恢复时误标中断。
+- SSH 命令运行期间阻止插件更新。此功能是服务器管理与远程作业，不是通用交互式终端、SFTP 文件管理或完整 `ssh://` 工作区；本机 Office/WPS 文件页继续处理本机工作副本。
+
+主数据目录新增 `ssh/servers.json`（受保护凭据）、`ssh/jobs/<ID>/job.json` 与日志，以及 `competitions-cache.json`。API 为 `/research-workbench/servers` 和 `/research-workbench/competitions`；沿用 DSH 本机认证、Origin 边界，SSH 写入另要求意图请求头。没有替换或导入用户现有 SSH 配置。
 
 ## v0.4.0：内置 WPS / Office 协作
 
@@ -92,10 +109,10 @@
 
 ## 安装
 
-### 安装固定版本 v0.4.0
+### 安装固定版本 v0.5.0
 
 ```powershell
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.4.0"
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.5.0"
 dsh web
 ```
 
@@ -105,18 +122,18 @@ Windows Desktop 使用的是 `desktop` Profile，请把 `--profile web` 换成 `
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.4.0"
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.5.0"
 ```
 
 再次启动 DSH，Windows Desktop 建议完全退出并重开。如果浏览器界面未更新，可按 `Ctrl+Shift+R`。
 
 ### 从 GitHub Release 的 `.tgz` 安装
 
-在 [v0.4.0 Release](https://github.com/luoyan96/dsh-research-workbench/releases/tag/v0.4.0) 下载 `dsh-research-workbench-0.4.0.tgz`，退出 DSH 后安装：
+在 [v0.5.0 Release](https://github.com/luoyan96/dsh-research-workbench/releases/tag/v0.5.0) 下载 `dsh-research-workbench-0.5.0.tgz`，退出 DSH 后安装：
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.4.0.tgz"
+dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.5.0.tgz"
 ```
 
 ### npm 正式发布后

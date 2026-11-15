@@ -7,3 +7,6 @@ vendor/copylee-office/** -text
 helper/OfficeHelper.cs text eol=lf
 lib/native-office.js text eol=lf
 lib/native-office.NOTICES.txt text eol=lf
+# Preserve upstream PDF.js resources and generated parser comments verbatim.
+lib/literature-assets/** -text -whitespace
+lib/literature-xml.js text eol=lf -whitespace

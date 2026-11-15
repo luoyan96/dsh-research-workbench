@@ -1,8 +1,24 @@
 # 版本发布说明
 
-当前版本：`dsh-research-workbench@0.4.0`。通过 GitHub tag 或 Release 的 tgz 安装；**npm Registry 未发布前，`dsh-research-workbench@latest` 仍不能使用**。v0.4.0 包含论文编译持久化、独立更新、原生 Office 融合和本地文件工作区，保留公开 v0.3.3 及其资产。
+## v0.5.0：文献、科研竞赛与 SSH 服务器（2026-11-15）
 
-发布前 Windows `npm run check`：Node 69 通过 / 1 跳过，上游 Office 34 通过 / 1 跳过，合计 103 通过 / 2 跳过。已在隔离 DSH 0.2.1-rc.3 中用真实 WPS 和本地模拟模型验证 DOCX/PPTX 的原生会话、工具执行、保存和预览；DOTX/POTX 副本的原生编辑保存、原件完整性与只读快速失败另有实测。在线模型复杂任务和微软 Office 全套兼容性不在此验收结论内。
+本版在 v0.4.0 的 Office/WPS 文件工作区、论文编译和插件独立更新之上，统一加入以下三个原生入口：
+
+- **文献**：arXiv 关键词、标题、作者和编号搜索，支持排序、分页与 24 小时缓存；本地收藏保留真实元数据与版本，按基础编号去重。宿主后台下载 PDF，内置 PDF.js 支持翻页、缩放、复制文字和离线缓存阅读；单篇/多选/全部收藏导出 BibTeX。模型共用同一套搜索、收藏和引用导出工具。暂不包含跨站聚合、订阅、评分或 Zotero。
+- **科研竞赛**：运行时读取 ML Contests 的国际 AI、数据科学与会议挑战赛，区分报名和提交截止；支持平台、研究方向、关联学术会议和日期范围筛选、搜索及本机收藏。保留数据来源与获取时间，异常日期和离线缓存明确标示，不宣称覆盖所有学科。
+- **SSH 服务器**：参考 Mimir，支持 Linux/POSIX 服务器管理、密码/私钥/Agent、主机指纹核对、GPU 探测、异步命令、持久化退出状态与日志，以及模型服务器工具。AI 提交命令走 DSH 原生 approval；凭据和主机信任在页面管理。超时、断网或停止跟踪不保证远端进程停止，不自动重复提交未知任务。本版不提供通用交互式终端或 SFTP。
+
+### 验证与安装包
+
+Windows 完整检查为 Node 94 通过 / 1 跳过，上游 Office 34 通过 / 1 跳过，合计 **128 通过 / 2 跳过**。新增 25 项测试覆盖竞赛日期与缓存、SSH 握手/主机信任/任务恢复、Atom 解析、版本归一化、收藏/离线恢复、引用转义、后台 PDF、字节范围、HTTP 鉴权和模型工具。
+
+DSH 0.2.1-rc.3 隔离环境验证了真实赛事源、中文搜索、收藏刷新恢复、本机合成 SSH 服务的连接/GPU/任务日志，以及真实 arXiv 编号/标题/作者查询、PDF 阅读/翻页/缩放/文字提取和单篇/多篇 BibTeX 下载。覆盖 1280×720、800×900 和 600×900 布局。收藏和 PDF 缓存可跨宿主重启恢复；稳定页面未发现新模块警告或错误。停止测试宿主时，旧页面曾记录 DSH 会话恢复及请求取消错误，重新加载后功能正常。
+
+发布包包含打包的 ssh2、PDF.js、XML 解析器及完整依赖许可，无运行时 npm 依赖；Mimir 的 MIT 署名保留。必须包含 lib/ssh-transport.js、lib/ssh-transport.NOTICES.txt、lib/literature-assets/、lib/literature-xml.js、对应 notices 和工作台模块。发布前执行完整检查、更新器归档校验和官方 CLI 隔离安装；GitHub 资产的大小与 SHA-256 必须与本地一致。
+
+未替换 AcceptCat 真实 profile，未读取私人文献或访问实验室真实服务器。真实账号的模型任务质量、远程 GPU 实机与微软 Office 完整兼容矩阵仍需实际材料验收。
+
+当前版本为 dsh-research-workbench@0.5.0，GitHub 标签 v0.5.0；保留公开 v0.4.0、v0.3.3 及其资产。GitHub Release 与 npm 发布分开执行，npm Registry 尚未发布时不能使用 @latest 安装。
 
 ## v0.4.0：论文编译任务与日志恢复（2026-11-04）
 
@@ -22,16 +38,16 @@
 
 ## 发布到 GitHub
 
-每个版本使用对应的不可覆盖标签及 tgz 资产。v0.4.0 的安装方式：
+每个版本使用对应的不可覆盖标签及 tgz 资产。v0.5.0 的安装方式：
 
 ```powershell
 dsh plugin --profile desktop remove dsh-research-workbench
-dsh plugin --profile desktop add "github:luoyan96/dsh-research-workbench#v0.4.0"
+dsh plugin --profile desktop add "github:luoyan96/dsh-research-workbench#v0.5.0"
 ```
 
 请在 Windows DSH 安装新版本前完全退出客户端。项目数据位于 `~/.dsh/research-workbench`，不在安装包目录下，升级不会删除已有成果。旧版结构化草稿保留原数据和 API，新界面不自动迁移为 Office 文件。
 
-发布顺序：更新 package.json/package-lock 与说明 → 完整检查及打包校验 → PR CI 通过并合并 main → 在合并提交创建 `v0.4.0` → 创建 GitHub Release 并上传 `dsh-research-workbench-0.4.0.tgz` → 确认 GitHub 资产的 SHA-256 digest、大小与本地一致。GitHub Release 与 npm 发布分别执行；仓库当前的 npm Trusted Publisher 仍需包所有者配置，不因 GitHub 发版而触发。
+发布顺序：更新 package.json/package-lock 与说明 → 完整检查及打包校验 → PR CI 通过并合并 main → 在合并提交创建 `v0.5.0` → 创建 GitHub Release 并上传 `dsh-research-workbench-0.5.0.tgz` → 确认 GitHub 资产的 SHA-256 digest、大小与本地一致。GitHub Release 与 npm 发布分别执行；仓库当前的 npm Trusted Publisher 仍需包所有者配置，不因 GitHub 发版而触发。
 
 ## 第一次 npm 发布（仅包所有者操作）
 

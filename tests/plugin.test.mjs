@@ -115,7 +115,7 @@ test('checked-in client artifacts are exactly regenerated from their source', as
   assert.equal(client, await read('src/client.js'));
   assert.equal(await read('lib/index.js'), await read('src/index.js'));
   assert.equal(await read('lib/papers.js'), await read('src/papers.js'));
-  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','files','competitions','servers','server-tools','ssh-credentials','service-utils','literature']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
+  for (const name of ['content','office','office-import','tools','deadlines','updates','update-archive','native-office-activity','office-workspace','files','competitions','servers','server-tools','ssh-credentials','service-utils','literature']) assert.equal(await read(`lib/workbench/${name}.js`), await read(`src/workbench/${name}.js`));
 });
 
 test('browser module registers eight native DSH main pages and sidebar rows in order', async () => {

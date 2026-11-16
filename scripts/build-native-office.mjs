@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +43,7 @@ const statusBridge = `  // Research integration: Connection admits authenticated
 export function adaptOfficeSource(filename, original) {
   let source = original.replaceAll('\r\n', '\n').replaceAll('office_', 'research_office_').replaceAll("'dsh-office'", "'research-workbench-office'");
   if (filename.endsWith('/src/index.ts')) {
+    source = "import { createWorkspaceTools } from '../../../src/workbench/office-workspace.js';\n" + source;
     source = "import { trackOfficeCall, afterOfficeTransactions } from '../../../src/workbench/native-office-activity.js';\n" + source;
     source = replaceOnce(source, "export const name = '@copylee/dsh-office'", "export const name = 'dsh-research-workbench/native-office'");
     source = replaceOnce(source, "name: 'office:guide'", "name: 'research-office:guide'");
@@ -50,11 +52,18 @@ export function adaptOfficeSource(filename, original) {
     source = replaceOnce(source, '    working.delete(agent)\n', '    working.delete(agent)\n    if (working.size > 0) return // Other Office agents still own background work.\n');
     source = replaceOnce(source, "    void helper.call('card', { text: 'AI 已完成'", "    afterOfficeTransactions(() => {\n      if (working.size > 0) return\n      void helper.call('card', { text: 'AI 已完成'");
     source = replaceOnce(source, "    void helper.call<string[]>('settle', {}, 60_000).then(said => { for (const line of said) ctx.logger.info(`office: ${line}`) }).catch(() => {})\n  }", "      void helper.call<string[]>('settle', {}, 60_000).then(said => { for (const line of said) ctx.logger.info(`office: ${line}`) }).catch(() => {})\n    })\n  }");
-    source = replaceOnce(source, '  const tools = createTools({', "  // The research file UI shares this exact helper and settings with model tools.\n  ;(ctx as any).reflect.provide('researchOffice', { call: helper.call, settings }, undefined)\n\n  const tools = createTools({");
+    source = replaceOnce(source, '  const tools = createTools({', "  let fileWorkspace: any = null\n  ctx.inject(['researchFileWorkspace'], (scope: any) => {\n    const current = scope.get('researchFileWorkspace')\n    fileWorkspace = current\n    scope.effect(() => () => { if (fileWorkspace === current) fileWorkspace = null }, 'research-office: file context')\n  })\n  // Explicit UI open goes through call(); model tools use per-conversation quiet settings.\n  ;(ctx as any).reflect.provide('researchOffice', { call: helper.call, settings, release: async (args: Record<string, unknown>) => {\n    if (working.size > 0) return { deferred: true }\n    return helper.call('release_background', args, 60_000)\n  } }, undefined)\n\n  const tools = createWorkspaceTools(createTools, {");
+    source = replaceOnce(source, '  })\n  for (const tool of tools)', '  }, () => fileWorkspace)\n  for (const tool of tools)');
     const start = source.indexOf('  // Settings page bridge');
     const end = source.indexOf("  ctx.inject(['systemPrompt']", start);
     if (start < 0 || end < 0) throw Error('Office status adapter no longer matches upstream');
     source = source.slice(0, start) + statusBridge + source.slice(end);
+  }
+  if (filename.endsWith('/src/tools.ts')) {
+    source = "import { officeDocumentKey } from '../../../src/workbench/office-workspace.js';\n" + source;
+    source = replaceOnce(source, 'Silent mode is on (the user chose it in the settings):', 'Silent mode is on for this document:');
+    source = replaceOnce(source, '${on.app}:${fileName(on.doc).toLowerCase()}', '${on.app}:${officeDocumentKey(on.doc)}');
+    source = replaceOnce(source, "if (doc.how !== 'attached') own.add(keyOf(current))", "if (doc.how !== 'attached' || doc.background) own.add(keyOf(current))");
   }
   if (filename.endsWith('/src/settings.ts')) source = replaceOnce(source, "export const ENTRY_ID = 'copylee-office'", `export const ENTRY_ID = '${OFFICE_ENTRY}'`);
   if (filename.endsWith('/src/client/index.ts')) {
@@ -86,6 +95,12 @@ export function adaptOfficeHelper(source) {
   source = replaceOnce(source, '        Sweep();\n        SweepOwn();', '        // Research integration: never kill processes based on stale PID notes.');
   source = removeCsMethod(source, '    static void SweepOwn()');
   source = removeCsMethod(source, '    static void Sweep()');
+  source = removeCsMethod(source, '    static object Settle()');
+  source = replaceOnce(source, '    static dynamic App(string kind, bool start)', readFileSync(new URL('../src/office-background.cs', import.meta.url), 'utf8') + '\n\n    static dynamic App(string kind, bool start)');
+  source = replaceOnce(source, '        if (cmd == "open") return Open(kind, a);', '        if (cmd == "open") return Open(kind, a);\n        if (cmd == "release_background") return ReleaseBackground(kind, a);');
+  source = replaceOnce(source, '        app = Activator.CreateInstance(type);\n        Started.Add(Key(kind));', '        bool canOwn = kind != "ppt" || !PptProcessAlreadyExists();\n        app = Activator.CreateInstance(type);\n        if (canOwn) Started.Add(Key(kind));');
+  source = replaceOnce(source, 'Console.Error.WriteLine("TRACE " + text)', 'Console.Error.WriteLine("TRACE " + DateTime.UtcNow.ToString("o") + " " + text)');
+  source = replaceOnce(source, '                reply["result"] = Run(args.Need("cmd"), args);', '                Trace("command " + args.Need("cmd") + " begin foreground " + OfficeForegroundWindow());\n                reply["result"] = Run(args.Need("cmd"), args);\n                Trace("command " + args.Need("cmd") + " end foreground " + OfficeForegroundWindow());');
   source = replaceOnce(source, '            doc.Save();\n            result["path"] = (string)doc.FullName;', '            bool readOnly = false;\n            try { readOnly = Truthy(doc.ReadOnly); } catch (Exception) { }\n            if (readOnly) throw new Fail("READ_ONLY", "The document is read-only or locked by another Office instance. Close the other instance or save a copy with a new path; do not retry an in-place save.");\n            doc.Save();\n            result["path"] = (string)doc.FullName;');
   return '// Integrated from @copylee/dsh-office 1.2.0 (MIT); see vendor/copylee-office/LICENSE and NOTICE.md.\n' + source.replaceAll('"dsh-office"', '"research-workbench-office"');
 }

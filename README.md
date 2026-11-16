@@ -4,6 +4,10 @@
 
 **v0.4.0** 将项目书、PPT、专利与软著改为「上传自己的文件或模板 → 实际页面预览 + AI 对话 → 保存下载」，内置 WPS / Office 协作、插件独立更新，并修复论文切换页面后编译状态和日志丢失。原件保留，AI 修改工作副本；模板库和实验室共享文件暂不提供。要求 DSH 0.2.1-rc.3 或兼容新版；本地 Office 文件流程需要 Windows 与可用的 WPS / Office。
 
+## v0.5.1：WPS 后台编辑修复（2026-11-16）
+
+普通 AI 编辑、预览和保存下载在后台完成，结束后释放插件拥有的隐藏文档，避免 WPS 抢焦点和窗口遗留；主动点击打开的文件及原先打开的未保存文档保持原样。WPS 实机覆盖三种初始状态、15 个用例，自动检查 137 通过 / 2 跳过。完整复现、验证范围及取消行为见 [RELEASING.md](RELEASING.md)。
+
 ## v0.5.0：文献、科研竞赛与 SSH 服务器（2026-11-15）
 
 - **文献**：参考 Mimir 的文献工作流，支持 arXiv 关键词/标题/作者/编号查询、相关性/提交日期/更新日期排序和分页；每页 20 条，搜索结果缓存 24 小时，API 请求间隔至少 3.1 秒。收藏按 arXiv 基础编号去重，保留收藏时的版本和真实元数据，重启后可恢复；可筛选、取消收藏。
@@ -47,6 +51,7 @@
 - 上传原件保存在 `files/<ID>/original/`，编辑对象在 `files/<ID>/work/`，页面显示实际路径。普通文件初始副本与原件逐字节一致；DOTX/POTX 仅调整 OOXML 主内容类型，复制为 DOCX/PPTX，保留原版式、图片和其他部件。AI 不会把文件拆成固定章节表单。用户本机上传源文件不会被覆盖。
 - 每份工作文件绑定独立 DSH 会话，工作目录设为其 `work/`。宿主把目标路径作为可重建的模型上下文提供给这个会话；`research_file_current` 只返回当前会话的工作副本。Office 工具必须使用明确路径，读取后修改并保存。
 - 「在 WPS / Office 中打开」支持手动精细编辑；「保存并下载」先保存当前原生文档，再下载工作副本。「下载上传原件」随时可取回备份。
+- 文件绑定会话中的 AI 编辑、预览和保存下载在后台处理，不受全局「打开时显示窗口」等设置影响；处理结束只释放插件拥有的隐藏文档和空实例。主动点击「在 WPS / Office 中打开」的文件会保持打开，原先打开的文档及未保存编辑也会保留。取消会停止后续工具调用，但已执行的原生编辑不会自动回滚。
 - 预览在宿主后台运行，页面切换不取消；成功/失败记录写入 `file.json`，已有预览在失败时保留。宿主意外退出留下的预览标为中断，可以手动刷新。文件绑定、保存记录和会话历史可在返回或重新加载后恢复；未提交的原生聊天草稿沿用 DSH 的本机保存机制。Office 保存后会自动刷新预览，也可手动刷新和翻页。
 - 工作副本只读或被其他 Office 实例占用时显示实际状态；原地保存立即返回错误，不再等待隐藏的另存为对话框。可先关闭占用窗口后刷新，或下载已保存的副本重新上传。不会为了清理占用而杀掉用户的 Office 进程。
 
@@ -109,10 +114,10 @@
 
 ## 安装
 
-### 安装固定版本 v0.5.0
+### 安装固定版本 v0.5.1
 
 ```powershell
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.5.0"
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.5.1"
 dsh web
 ```
 
@@ -122,18 +127,18 @@ Windows Desktop 使用的是 `desktop` Profile，请把 `--profile web` 换成 `
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.5.0"
+dsh plugin --profile web add "github:luoyan96/dsh-research-workbench#v0.5.1"
 ```
 
 再次启动 DSH，Windows Desktop 建议完全退出并重开。如果浏览器界面未更新，可按 `Ctrl+Shift+R`。
 
 ### 从 GitHub Release 的 `.tgz` 安装
 
-在 [v0.5.0 Release](https://github.com/luoyan96/dsh-research-workbench/releases/tag/v0.5.0) 下载 `dsh-research-workbench-0.5.0.tgz`，退出 DSH 后安装：
+在 [v0.5.1 Release](https://github.com/luoyan96/dsh-research-workbench/releases/tag/v0.5.1) 下载 `dsh-research-workbench-0.5.1.tgz`，退出 DSH 后安装：
 
 ```powershell
 dsh plugin --profile web remove dsh-research-workbench
-dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.5.0.tgz"
+dsh plugin --profile web add "$env:USERPROFILE\Downloads\dsh-research-workbench-0.5.1.tgz"
 ```
 
 ### npm 正式发布后

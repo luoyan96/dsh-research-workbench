@@ -8,6 +8,10 @@ import { nativeOfficeBusy, trackOfficeCall, trackOfficeTransaction } from '../sr
 const read = name => readFile(new URL('../' + name, import.meta.url), 'utf8');
 const names = ['open', 'status', 'read', 'edit', 'help', 'render', 'save', 'close'].map(name => 'research_office_' + name);
 
+test('the generated Windows helper compiles with the system C# compiler', { skip:process.platform!=='win32' }, async()=>{
+  assert.match(await office.ensureHelperExe(), /office-helper\.exe$/);
+});
+
 function fakeOffice() {
   const calls = [];
   const helper = { async call(cmd, args) {

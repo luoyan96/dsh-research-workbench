@@ -407,7 +407,9 @@ static class Program
             {
                 Bag args = new Bag(Json.DeserializeObject(line));
                 id = args.Raw("id");
+                Trace("command " + args.Need("cmd") + " begin foreground " + OfficeForegroundWindow());
                 reply["result"] = Run(args.Need("cmd"), args);
+                Trace("command " + args.Need("cmd") + " end foreground " + OfficeForegroundWindow());
                 reply["ok"] = true;
             }
             catch (Exception error)
@@ -679,67 +681,111 @@ static class Program
     }
 
     /// The agent has stopped: what it opened in the background is saved and closed, and what we started for it ended.
+
+
+    [DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
+    static extern IntPtr OfficeForegroundWindow();
+
+    // Some WPS installations return an existing process from CreateInstance
+    // even when it was not published in the Running Object Table. That is not
+    // evidence that the helper owns the application.
+    static bool PptProcessAlreadyExists()
+    {
+        // WPS keeps service-only wps.exe processes after every window closes.
+        // wpp.exe identifies an already running Presentation instance.
+        string[] names = Suite == "wps" ? new string[] { "wpp" } : new string[] { "POWERPNT" };
+        try
+        {
+            bool found = false;
+            foreach (string name in names)
+                foreach (System.Diagnostics.Process process in System.Diagnostics.Process.GetProcessesByName(name))
+                    using (process) { found = true; }
+            return found;
+        }
+        catch (Exception) { return true; } // Uncertain ownership never grants permission to quit.
+    }
+
+    static void ReleaseEmptyOwnedApp(string kind, dynamic app)
+    {
+        if ((int)Docs(kind, app).Count != 0) return;
+        if (kind != "ppt" || Started.Contains(Key(kind)))
+        {
+            app.Quit(); Started.Remove(Key(kind));
+            Trace("quit owned empty " + kind + " foreground " + OfficeForegroundWindow());
+        }
+        Own.Remove(Key(kind));
+    }
+
+    // Release one exact background document. This API is used by preview/save
+    // transactions; it never operates on a document merely because it is active.
+    static object ReleaseBackground(string kind, Bag a)
+    {
+        string target = a.Need("doc");
+        dynamic app = OwnApp(kind, false);
+        if (app == null) return "not owned";
+        dynamic doc = Find(kind, app, target);
+        if (doc == null) { ReleaseEmptyOwnedApp(kind, app); return "already closed"; }
+        string full = (string)doc.FullName;
+        if (!Hidden.Contains(full) || Revealed.Contains(full)) return "left open (user document)";
+        bool watched = kind == "ppt" ? (int)doc.Windows.Count > 0 : Truthy(app.Visible);
+        if (watched)
+        {
+            Hidden.Remove(full); Revealed.Add(full);
+            return "left open (user has a document window)";
+        }
+        if (!Truthy(doc.Saved) && ((string)doc.Path).Length > 0)
+        {
+            if (kind == "word") FinishMath(doc);
+            doc.Save();
+        }
+        Trace("release background " + kind + " foreground " + OfficeForegroundWindow());
+        if (kind == "word") doc.Close(0);
+        else if (kind == "excel") doc.Close(false);
+        else { doc.Saved = -1; doc.Close(); }
+        Hidden.Remove(full);
+        // Visibility is not ownership: WPS can leave a visible empty shell
+        // after closing its last windowless presentation.
+        ReleaseEmptyOwnedApp(kind, app);
+        return "released background document";
+    }
+
     static object Settle()
     {
         List<object> said = new List<object>();
-        foreach (string suite in Suites)
-        foreach (string kind in new string[] { "word", "excel", "ppt" })
+        try
         {
-            Suite = suite;
-            dynamic app = OwnApp(kind, false);
-            if (app == null) continue;
-            List<object> mine = new List<object>();
-            try { foreach (dynamic doc in Docs(kind, app)) if (Hidden.Contains((string)doc.FullName)) mine.Add(doc); }
-            catch (Exception) { }
-            foreach (dynamic doc in mine)
+            foreach (string suite in Suites)
+            foreach (string kind in new string[] { "word", "excel", "ppt" })
             {
-                string full = "";
-                try
+                Suite = suite;
+                dynamic app = OwnApp(kind, false);
+                if (app == null) continue;
+                List<string> mine = new List<string>();
+                try { foreach (dynamic doc in Docs(kind, app)) if (Hidden.Contains((string)doc.FullName)) mine.Add((string)doc.FullName); }
+                catch (Exception error) { said.Add("could not inspect " + AppName(kind) + ": " + error.Message.Trim()); continue; }
+                foreach (string full in mine)
                 {
-                    full = (string)doc.FullName;
-                    bool unsaved = !Truthy(doc.Saved) && ((string)doc.Path).Length > 0;
-                    // No one can see this document, so work left unsaved would simply be lost: it is kept.
-                    if (unsaved) { if (kind == "word") FinishMath(doc); doc.Save(); }
-                    // The user opened it meanwhile and is looking at it: it is theirs now, saved but not closed.
-                    bool watched = false;
-                    try { watched = kind == "ppt" ? (int)doc.Windows.Count > 0 : Truthy(app.Visible); } catch (Exception) { }
-                    if (watched)
+                    try { said.Add(Convert.ToString(ReleaseBackground(kind, new Bag(new Dictionary<string, object> { { "doc", full } }))) + ": " + full); }
+                    catch (Exception error)
                     {
-                        Hidden.Remove(full);
-                        Revealed.Add(full);
-                        said.Add((unsaved ? "saved " : "left open ") + full + " (the user has it on screen)");
-                        continue;
+                        // Retain both the ownership record and COM reference so
+                        // a failed save can be retried or explicitly revealed.
+                        said.Add("could not release " + full + ": " + error.Message.Trim());
                     }
-                    if (kind == "word") doc.Close(0); else if (kind == "excel") doc.Close(false); else { doc.Saved = -1; doc.Close(); }
-                    said.Add((unsaved ? "saved and closed " : "closed ") + full);
                 }
-                catch (Exception error) { said.Add("could not close " + full + ": " + error.Message.Trim()); }
-                Hidden.Remove(full);
+                try { ReleaseEmptyOwnedApp(kind, app); }
+                catch (Exception) { } // The last release may already have quit this instance.
             }
-            try
-            {
-                bool seen = false;
-                try { seen = Truthy(app.Visible); } catch (Exception) { }
-                if (kind != "ppt" && (int)Docs(kind, app).Count == 0) { app.Quit(); Own.Remove(Key(kind)); }
-                else if (kind != "ppt" && !seen) { }   // still holds something of ours: stays for the next turn
-                else if (kind == "ppt")
-                {
-                    // Ours to end only if we started it, it holds nothing and shows nothing; else it is just let go of.
-                    bool shown = false;
-                    try { shown = Truthy(app.Visible); } catch (Exception) { }
-                    if (Started.Contains(Key(kind)) && !shown && (int)app.Presentations.Count == 0) { app.Quit(); Started.Remove(Key(kind)); }
-                    Own.Remove(Key(kind));
-                }
-            }
-            catch (Exception) { }
-            app = null;
         }
-        // The apps go only once nothing here refers to them any more.
-        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); GC.WaitForPendingFinalizers();
-        if (Own.Count == 0) { try { File.Delete(OwnNotePath()); } catch (Exception) { } }
-        Suite = "office";
+        finally
+        {
+            Suite = "office";
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); GC.WaitForPendingFinalizers();
+            if (Own.Count == 0) { try { File.Delete(OwnNotePath()); } catch (Exception) { } }
+        }
         return said;
     }
+
 
     static dynamic App(string kind, bool start)
     {
@@ -748,8 +794,9 @@ static class Program
         if (!start) throw new Fail("NOT_RUNNING", AppName(kind) + " is not running. Open the file with office_open first.");
         Type type = Type.GetTypeFromProgID(ProgId(kind));
         if (type == null) throw new Fail("NOT_INSTALLED", AppName(kind) + " is not installed on this computer.");
+        bool canOwn = kind != "ppt" || !PptProcessAlreadyExists();
         app = Activator.CreateInstance(type);
-        Started.Add(Key(kind));
+        if (canOwn) Started.Add(Key(kind));
         // Started by automation, Excel would quit once we let go of it; hand it to the user.
         if (kind == "excel") { try { app.UserControl = true; } catch (Exception) { } }
         return app;
@@ -856,6 +903,7 @@ static class Program
         string kind = Kind(a);
         Suite = SuiteFor(kind, a);
         if (cmd == "open") return Open(kind, a);
+        if (cmd == "release_background") return ReleaseBackground(kind, a);
         if (cmd == "quit")
         {
             dynamic idle = Running(kind);
@@ -1165,7 +1213,7 @@ static class Program
 
     public static void Trace(string text)
     {
-        if (Environment.GetEnvironmentVariable("DSH_OFFICE_DEBUG") == "1") Console.Error.WriteLine("TRACE " + text);
+        if (Environment.GetEnvironmentVariable("DSH_OFFICE_DEBUG") == "1") Console.Error.WriteLine("TRACE " + DateTime.UtcNow.ToString("o") + " " + text);
     }
 
     delegate bool EachWindow(IntPtr window, IntPtr state);

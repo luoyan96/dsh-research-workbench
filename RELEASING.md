@@ -1,8 +1,8 @@
 # 版本发布说明
 
-## 未发布：WPS 后台编辑与窗口清理（2026-11-16）
+## v0.5.1：WPS 后台编辑与窗口清理（2026-11-16）
 
-修复文件工作台普通 AI 编辑、预览和下载期间 WPS 被显示、回合结束后仍遗留演示窗口的问题。当前修复位于本地 `fix/wps-background-lifecycle` 分支，基于 v0.5.0；尚未发布新版本，不覆盖公开 v0.5.0 标签或安装包。
+修复文件工作台普通 AI 编辑、预览和下载期间 WPS 被显示、回合结束后仍遗留演示窗口的问题。本版基于 v0.5.0，使用独立 v0.5.1 标签和安装包；保留旧版标签及其资产。
 
 ### 复现与定位
 
@@ -44,7 +44,7 @@ DSH 0.2.1-rc.3 隔离环境验证了真实赛事源、中文搜索、收藏刷�
 
 未替换 AcceptCat 真实 profile，未读取私人文献或访问实验室真实服务器。真实账号的模型任务质量、远程 GPU 实机与微软 Office 完整兼容矩阵仍需实际材料验收。
 
-当前版本为 dsh-research-workbench@0.5.0，GitHub 标签 v0.5.0；保留公开 v0.4.0、v0.3.3 及其资产。GitHub Release 与 npm 发布分开执行，npm Registry 尚未发布时不能使用 @latest 安装。
+本节对应 dsh-research-workbench@0.5.0，GitHub 标签 v0.5.0；保留公开 v0.4.0、v0.3.3 及其资产。GitHub Release 与 npm 发布分开执行，npm Registry 尚未发布时不能使用 @latest 安装。
 
 ## v0.4.0：论文编译任务与日志恢复（2026-11-04）
 
@@ -64,16 +64,16 @@ DSH 0.2.1-rc.3 隔离环境验证了真实赛事源、中文搜索、收藏刷�
 
 ## 发布到 GitHub
 
-每个版本使用对应的不可覆盖标签及 tgz 资产。v0.5.0 的安装方式：
+每个版本使用对应的不可覆盖标签及 tgz 资产。v0.5.1 的安装方式：
 
 ```powershell
 dsh plugin --profile desktop remove dsh-research-workbench
-dsh plugin --profile desktop add "github:luoyan96/dsh-research-workbench#v0.5.0"
+dsh plugin --profile desktop add "github:luoyan96/dsh-research-workbench#v0.5.1"
 ```
 
 请在 Windows DSH 安装新版本前完全退出客户端。项目数据位于 `~/.dsh/research-workbench`，不在安装包目录下，升级不会删除已有成果。旧版结构化草稿保留原数据和 API，新界面不自动迁移为 Office 文件。
 
-发布顺序：更新 package.json/package-lock 与说明 → 完整检查及打包校验 → PR CI 通过并合并 main → 在合并提交创建 `v0.5.0` → 创建 GitHub Release 并上传 `dsh-research-workbench-0.5.0.tgz` → 确认 GitHub 资产的 SHA-256 digest、大小与本地一致。GitHub Release 与 npm 发布分别执行；仓库当前的 npm Trusted Publisher 仍需包所有者配置，不因 GitHub 发版而触发。
+发布顺序：更新 package.json/package-lock 与说明 → 完整检查及打包校验 → PR CI 通过并合并 main → 在合并提交创建 `v0.5.1` → 创建 GitHub Release 并上传 `dsh-research-workbench-0.5.1.tgz` → 确认 GitHub 资产的 SHA-256 digest、大小与本地一致。GitHub Release 与 npm 发布分别执行；仓库当前的 npm Trusted Publisher 仍需包所有者配置，不因 GitHub 发版而触发。
 
 ## 第一次 npm 发布（仅包所有者操作）
 

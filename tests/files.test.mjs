@@ -105,6 +105,23 @@ test('preview failure is durable and an interrupted preview can be recovered aft
   await assert.rejects(restored.preview(item.id), { code: 'NO_OFFICE' });
 });
 
+test('preview success/failure and save release only their exact background target; explicit open retains it',async t=>{
+  const {service,calls,office}=await fixture(t);const released=[];
+  service.setOffice({...office,async release(args){released.push(args);}});
+  const item=await service.upload('slides','QA.pptx',await source('sample.pptx'));
+  await service.preview(item.id);await service.idle();assert.deepEqual(released,[{app:'ppt',doc:item.path}]);
+  await service.act(item.id,'save');assert.equal(released.length,2);
+  await service.act(item.id,'open');assert.equal(released.length,2,'user-visible open is not auto-released');assert.equal(calls.at(-1).args.show,true);
+  service.setOffice({...office,async call(cmd,args){if(cmd==='render')throw Error('render failed');return office.call(cmd,args);},async release(args){released.push(args);}});
+  await service.preview(item.id);await service.idle();assert.equal(released.length,3);assert.match((await service.one(item.id)).preview.error,/render failed/);assert.ok(released.every(x=>x.doc===item.path));
+});
+
+test('a failed cleanup is recorded and never replaces the primary save error',async t=>{
+  const {service,office}=await fixture(t);const item=await service.upload('slides','QA.pptx',await source('sample.pptx'));
+  service.setOffice({...office,async call(cmd,args){if(cmd==='save')throw Object.assign(Error('save failed'),{code:'SAVE_FAILED'});return office.call(cmd,args);},async release(){throw Error('cleanup failed');}});
+  await assert.rejects(service.act(item.id,'save'),{code:'SAVE_FAILED'});assert.match((await service.one(item.id)).events.at(-1).detail||JSON.stringify((await service.one(item.id)).events.at(-1)),/cleanup failed/);
+});
+
 test('PowerPoint previews use the native slide count, including refreshed counts after edits', async t => {
   const { service } = await fixture(t);
   service.setOffice({ async call(cmd, args) {

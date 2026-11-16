@@ -13,6 +13,7 @@ await mkdir(resolve(root, 'lib/workbench'), { recursive: true });
 const files=['index.js','client.js','papers.js','workbench/content.js','workbench/office.js','workbench/office-import.js','workbench/tools.js','workbench/deadlines.js','workbench/updates.js','workbench/update-archive.js','workbench/native-office-activity.js','workbench/files.js','workbench/service-utils.js','workbench/competitions.js','workbench/servers.js','workbench/server-tools.js','workbench/ssh-credentials.js'];
 await Promise.all(files.map(file=>copyFile(resolve(root, 'src',file),resolve(root,'lib',file))));
 const nativeOffice = await buildNativeOffice();
+await copyFile(resolve(root,'src/workbench/office-workspace.js'),resolve(root,'lib/workbench/office-workspace.js'));
 await copyFile(resolve(root,'src/workbench/literature.js'),resolve(root,'lib/workbench/literature.js'));
 const xml = await build({ absWorkingDir: root, entryPoints:['src/literature-xml.js'], outfile:'lib/literature-xml.js', bundle:true, format:'esm', platform:'node', target:'es2022', metafile:true, legalComments:'eof', logLevel:'warning' });
 await writeFile(resolve(root,'lib/literature-xml.NOTICES.txt'),await bundledLicenses(xml.metafile));
